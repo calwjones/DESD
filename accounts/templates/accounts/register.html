@@ -1,13 +1,17 @@
-<!DOCTYPE html>
-<html>
-<head><title>Register</title></head>
-<body>
-  <h2>Create Account</h2>
-  <form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Register</button>
-  </form>
-  <p>Already have an account? <a href="{% url 'accounts:login' %}">Login here</a></p>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Register{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <h2>Create Account</h2>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit" class="btn btn-primary">Register</button>
+    </form>
+    <p>Already have an account? <a href="{% url 'accounts:login' %}">Login here</a></p>
+  </div>
+</div>
+{% endblock %}
