@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}{{ product.name }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+    <div>
+      <h1>{{ product.name }}</h1>
+      <p>{{ product.get_category_display }} &middot; {{ product.producer.username }}</p>
+    </div>
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+      {% if product.is_organic %}
+        <span class="badge badge-green">Organic</span>
+      {% endif %}
+      {% if not product.is_available %}
+        <span class="badge badge-grey">Unavailable</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <p class="detail-price">
+    {% if product.discount_price %}
+      <span style="text-decoration:line-through; color:var(--text-muted); font-size:1rem;">£{{ product.price }}</span>
+      £{{ product.discount_price }}
+    {% else %}
+      £{{ product.price }}
+    {% endif %}
+  </p>
+
+  <div class="detail-grid">
+    <div class="detail-item" style="grid-column: 1 / -1;">
+      <label>Description</label>
+      <p>{{ product.description }}</p>
+    </div>
+    <div class="detail-item">
+      <label>Stock</label>
+      <p>{{ product.stock_quantity }} units</p>
+    </div>
+    {% if product.allergen_info %}
+    <div class="detail-item">
+      <label>Allergen Info</label>
+      <p>{{ product.allergen_info }}</p>
+    </div>
+    {% endif %}
+    {% if product.harvest_date %}
+    <div class="detail-item">
+      <label>Harvest Date</label>
+      <p>{{ product.harvest_date }}</p>
+    </div>
+    {% endif %}
+    {% if product.best_before_date %}
+    <div class="detail-item">
+      <label>Best Before</label>
+      <p>{{ product.best_before_date }}</p>
+    </div>
+    {% endif %}
+    {% if product.available_from %}
+    <div class="detail-item">
+      <label>Available From</label>
+      <p>{{ product.available_from }}</p>
+    </div>
+    {% endif %}
+    {% if product.available_until %}
+    <div class="detail-item">
+      <label>Available Until</label>
+      <p>{{ product.available_until }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);">
+    <a href="{% url 'marketplace' %}" class="btn btn-secondary">Back to Marketplace</a>
+  </div>
+</div>
+{% endblock %}

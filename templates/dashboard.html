@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Producer Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+  <h1>Producer Dashboard</h1>
+  <a href="{% url 'products:add' %}" class="btn">Add Product</a>
+</div>
+
+{% if products %}
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <table class="product-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Price</th>
+          <th>Stock</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for product in products %}
+        <tr>
+          <td><strong>{{ product.name }}</strong></td>
+          <td>{{ product.get_category_display }}</td>
+          <td style="font-family:'DM Mono',monospace;">£{{ product.price }}</td>
+          <td>{{ product.stock_quantity }}</td>
+          <td>
+            {% if product.is_available %}
+              <span class="badge badge-green">Available</span>
+            {% else %}
+              <span class="badge badge-grey">Unavailable</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="actions">
+              <a href="{% url 'products:edit' product.pk %}" class="btn btn-secondary btn-sm">Edit</a>
+              <a href="{% url 'products:delete' product.pk %}" class="btn btn-danger btn-sm">Delete</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="card empty-state">
+    <p>You have no products listed yet.</p>
+    <a href="{% url 'products:add' %}" class="btn">Add your first product</a>
+  </div>
+{% endif %}
+{% endblock %}
