@@ -31,13 +31,8 @@
     docker compose up --build
     ```
 
-4.  **Apply database migrations**
 
-    ``` bash
-    docker compose exec web python manage.py migrate
-    ```
-
-5.  **Access the application**
+4.  **Access the application**
 
         http://localhost:8089
 

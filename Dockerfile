@@ -12,6 +12,8 @@ FROM python:${PYTHON_VERSION}-slim as base
 # Prevents Python from writing pyc files.
 ENV PYTHONDONTWRITEBYTECODE=1
 
+
+
 # Keeps Python from buffering stdout and stderr to avoid situations where
 # the application crashes without emitting any logs due to buffering.
 ENV PYTHONUNBUFFERED=1
@@ -44,8 +46,21 @@ USER appuser
 # Copy the source code into the container.
 COPY . .
 
+# Copy entrypoint script separately
+COPY entrypoint.sh /entrypoint.sh
+
+# Temporarily switch to root to set permissions
+USER root
+RUN chmod +x /entrypoint.sh
+
+# Switch back to non-privileged user
+USER appuser
+
 # Expose the port that the application listens on.
 EXPOSE 8089
 
-# Run the application.
-CMD python manage.py runserver 0.0.0.0:8089
+# Use entrypoint script
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Default command
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8089"]
