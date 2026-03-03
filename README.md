@@ -1,5 +1,79 @@
 # DESD Project Documentation
 
+
+## Running the Project
+
+### Prerequisites
+
+-   Docker Desktop
+-   Git
+
+------------------------------------------------------------------------
+
+### Setup Instructions
+
+1.  **Clone the repository**
+
+    ``` bash
+    git clone https://github.com/calwjones/DESD.git
+    cd DESD-Project
+    ```
+
+2.  **Create environment configuration file**
+
+    ``` bash
+    cp .env.example .env
+    ```
+
+3.  **Build and start the containers**
+
+    ``` bash
+    docker compose up --build
+    ```
+
+
+4.  **Access the application**
+
+        http://localhost:8089
+
+------------------------------------------------------------------------
+
+### Useful Commands
+
+**Stop containers**
+
+``` bash
+docker compose down
+```
+
+**Rebuild containers**
+
+``` bash
+docker compose up --build
+```
+
+**Run Django management commands**
+
+``` bash
+docker compose exec web python manage.py <command>
+```
+
+------------------------------------------------------------------------
+
+### Clean Startup Verification
+
+To verify the project runs from a fresh state:
+
+``` bash
+docker compose down -v
+docker compose up --build
+```
+
+This removes existing volumes and ensures the application starts
+correctly from a clean environment.
+
+
+
 ## Group Members
 - Arran Bailey
 - Charlie Rodway
