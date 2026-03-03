@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Producer Profile{% endblock %}
+
+{% block content %}
+<div class="form-wrapper">
+  <div class="form-card">
+    <h2>Edit Producer Profile</h2>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="form-actions">
+        <button type="submit" class="btn">Save Profile</button>
+        <a href="{% url 'producer_dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

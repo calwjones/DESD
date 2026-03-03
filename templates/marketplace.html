@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Marketplace{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Marketplace</h1>
+  <p>Browse fresh produce from local Bristol producers.</p>
+</div>
+
+{% if products %}
+  <div class="product-grid">
+    {% for product in products %}
+    <div class="product-card">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.5rem;">
+        <h3>{{ product.name }}</h3>
+        {% if product.is_organic %}
+          <span class="badge badge-green">Organic</span>
+        {% endif %}
+      </div>
+      <p class="meta">{{ product.get_category_display }} &middot; {{ product.producer.username }}</p>
+      <p class="meta" style="flex:1;">{{ product.description|truncatewords:15 }}</p>
+      <p class="price">
+        {% if product.discount_price %}
+          <span style="text-decoration:line-through; color:var(--text-muted); font-size:0.85rem;">£{{ product.price }}</span>
+          £{{ product.discount_price }}
+        {% else %}
+          £{{ product.price }}
+        {% endif %}
+      </p>
+      <div class="actions">
+        <a href="{% url 'products:detail' product.pk %}" class="btn btn-sm">View</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="card empty-state">
+    <p>No products are currently available.</p>
+  </div>
+{% endif %}
+{% endblock %}
