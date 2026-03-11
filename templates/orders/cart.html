@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1>Your Cart</h1>
+
+{% if cart.cart %}
+<table>
+    <tr>
+        <th>Product</th>
+        <th>Quantity</th>
+        <th>Remove</th>
+    </tr>
+
+    {% for product_id, quantity in cart.cart.items %}
+    <tr>
+        <td>{{ product_id }}</td>
+        <td>{{ quantity }}</td>
+        <td>
+            <a href="/orders/remove/{{ product_id }}">Remove</a>
+        </td>
+    </tr>
+    {% endfor %}
+
+</table>
+
+{% else %}
+
+<p>Your cart is empty.</p>
+
+{% endif %}
+
+{% endblock %}
