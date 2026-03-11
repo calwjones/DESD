@@ -69,8 +69,22 @@
     {% endif %}
   </div>
 
-  <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);">
-    <a href="{% url 'marketplace' %}" class="btn btn-secondary">Back to Marketplace</a>
-  </div>
+<div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);">
+
+  {% if product.is_available and product.stock_quantity > 0 %}
+    <a href="{% url 'add_to_cart' product.id %}" class="btn btn-primary">
+      Add to Cart
+    </a>
+  {% else %}
+    <button class="btn btn-secondary" disabled>
+      Out of Stock
+    </button>
+  {% endif %}
+
+  <a href="{% url 'marketplace' %}" class="btn btn-secondary">
+    Back to Marketplace
+  </a>
+
+</div>
 </div>
 {% endblock %}

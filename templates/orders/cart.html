@@ -4,23 +4,35 @@
 
 <h1>Your Cart</h1>
 
-{% if cart.cart %}
+{% if cart_items %}
 <table>
-    <tr>
-        <th>Product</th>
-        <th>Quantity</th>
-        <th>Remove</th>
-    </tr>
 
-    {% for product_id, quantity in cart.cart.items %}
-    <tr>
-        <td>{{ product_id }}</td>
-        <td>{{ quantity }}</td>
-        <td>
-            <a href="/orders/remove/{{ product_id }}">Remove</a>
-        </td>
-    </tr>
-    {% endfor %}
+<tr>
+<th>Product</th>
+<th>Price</th>
+<th>Quantity</th>
+<th>Subtotal</th>
+<th></th>
+</tr>
+
+{% for item in cart_items %}
+
+<tr>
+<td>{{ item.product.name }}</td>
+<td>£{{ item.product.price }}</td>
+<td>{{ item.quantity }}</td>
+<td>£{{ item.subtotal }}</td>
+
+<td>
+Remove
+</a>
+</td>
+
+</tr>
+
+{% endfor %}
+
+<p><strong>Total: £{{ total }}</strong></p>
 
 </table>
 
