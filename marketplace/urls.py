@@ -26,4 +26,5 @@ urlpatterns = [
     path('producers/', include('producers.urls')),
     path('', views.marketplace_view, name='marketplace'),
     path('dashboard/', views.producer_dashboard_view, name='producer_dashboard'),
+    path("orders/", include("orders.urls")),
 ]

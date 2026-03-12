@@ -16,6 +16,7 @@
     <div class="navbar-links">
       {% if user.is_authenticated %}
         <a href="{% url 'marketplace' %}">Marketplace</a>
+        <a href="{% url 'view_cart' %}">Cart</a>
         {% if user.role == 'producer' %}
           <a href="{% url 'producer_dashboard' %}">Dashboard</a>
         {% endif %}
