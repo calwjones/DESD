@@ -1,44 +1,68 @@
 {% extends "base.html" %}
 
+{% block title %}Your Cart{% endblock %}
+
 {% block content %}
 
 <h1>Your Cart</h1>
 
 {% if cart_items %}
-<table>
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th>Producer</th>
+        <th>Price</th>
+        <th>Quantity</th>
+        <th>Subtotal</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in cart_items %}
+      <tr>
+        <td>{{ item.product.name }}</td>
+        <td>{{ item.product.producer.username }}</td>
+        <td>&pound;{{ item.product.price }}</td>
+        <td>
+          <form method="post" action="{% url 'update_cart' item.product.id %}" style="display:inline-flex; align-items:center; gap:0.25rem;">
+            {% csrf_token %}
+            <input type="number" name="quantity" value="{{ item.quantity }}" min="1" style="width:4rem; padding:0.25rem; text-align:center;">
+            <button type="submit" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.85rem;">Update</button>
+          </form>
+        </td>
+        <td>&pound;{{ item.subtotal }}</td>
+        <td>
+          <a href="{% url 'remove_from_cart' item.product.id %}" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.85rem;">Remove</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 
-<tr>
-<th>Product</th>
-<th>Price</th>
-<th>Quantity</th>
-<th>Subtotal</th>
-<th></th>
-</tr>
+  {% if producer_subtotals %}
+  <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border);">
+    <h3>Subtotals by Producer</h3>
+    {% for producer, subtotal in producer_subtotals.items %}
+    <p>{{ producer }}: &pound;{{ subtotal }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
 
-{% for item in cart_items %}
+  <p style="margin-top:1rem; font-size:1.25rem;"><strong>Total: &pound;{{ total }}</strong></p>
 
-<tr>
-<td>{{ item.product.name }}</td>
-<td>£{{ item.product.price }}</td>
-<td>{{ item.quantity }}</td>
-<td>£{{ item.subtotal }}</td>
-
-<td>
-Remove
-</a>
-</td>
-
-</tr>
-
-{% endfor %}
-
-<p><strong>Total: £{{ total }}</strong></p>
-
-</table>
+  <div style="margin-top:1rem; display:flex; gap:0.5rem;">
+    <a href="{% url 'marketplace' %}" class="btn btn-secondary">Continue Shopping</a>
+  </div>
+</div>
 
 {% else %}
 
-<p>Your cart is empty.</p>
+<div class="card">
+  <p>Your cart is empty.</p>
+  <a href="{% url 'marketplace' %}" class="btn btn-primary" style="margin-top:1rem;">Browse Products</a>
+</div>
 
 {% endif %}
 
