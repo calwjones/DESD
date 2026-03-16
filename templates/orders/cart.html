@@ -1,14 +1,16 @@
 {% extends "base.html" %}
-
 {% block title %}Your Cart{% endblock %}
-
 {% block content %}
-
-<h1>Your Cart</h1>
-
+ 
 {% if cart_items %}
-<div class="card">
-  <table>
+ 
+<div class="dashboard-header">
+  <h1>Your Cart</h1>
+  <a href="{% url 'marketplace' %}" class="btn btn-secondary btn-sm">Continue Shopping</a>
+</div>
+ 
+<div class="card" style="padding: 0; overflow: hidden;">
+  <table class="product-table">
     <thead>
       <tr>
         <th>Product</th>
@@ -21,49 +23,103 @@
     </thead>
     <tbody>
       {% for item in cart_items %}
-      <tr>
-        <td>{{ item.product.name }}</td>
-        <td>{{ item.product.producer.username }}</td>
+      <tr data-product-id="{{ item.product.id }}">
+        <td style="font-weight: 500;">{{ item.product.name }}</td>
+        <td style="color: var(--muted);">{{ item.product.producer.username }}</td>
         <td>&pound;{{ item.product.price }}</td>
         <td>
-          <form method="post" action="{% url 'update_cart' item.product.id %}" style="display:inline-flex; align-items:center; gap:0.25rem;">
+          <form method="post" action="{% url 'update_cart' item.product.id %}">
             {% csrf_token %}
-            <input type="number" name="quantity" value="{{ item.quantity }}" min="1" style="width:4rem; padding:0.25rem; text-align:center;">
-            <button type="submit" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.85rem;">Update</button>
+            <input
+              type="number"
+              name="quantity"
+              value="{{ item.quantity }}"
+              min="1"
+              max="{{ item.product.stock_quantity }}"
+              onchange="updateCart(this, this.closest('tr').dataset.productId)"
+              style="width: 64px; padding: 0.3rem 0.5rem; text-align: center;"
+            >
           </form>
         </td>
-        <td>&pound;{{ item.subtotal }}</td>
+        <td style="font-weight: 600; color: var(--accent);" class="item-subtotal">&pound;{{ item.subtotal }}</td>
         <td>
-          <a href="{% url 'remove_from_cart' item.product.id %}" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.85rem;">Remove</a>
+          <a href="{% url 'remove_from_cart' item.product.id %}" class="btn btn-danger btn-sm">Remove</a>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
-
-  {% if producer_subtotals %}
-  <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border);">
-    <h3>Subtotals by Producer</h3>
-    {% for producer, subtotal in producer_subtotals.items %}
-    <p>{{ producer }}: &pound;{{ subtotal }}</p>
-    {% endfor %}
-  </div>
-  {% endif %}
-
-  <p style="margin-top:1rem; font-size:1.25rem;"><strong>Total: &pound;{{ total }}</strong></p>
-
-  <div style="margin-top:1rem; display:flex; gap:0.5rem;">
-    <a href="{% url 'marketplace' %}" class="btn btn-secondary">Continue Shopping</a>
+</div>
+ 
+<div style="display: flex; justify-content: flex-end; margin-top: 1.25rem;">
+  <div class="card" style="min-width: 280px; display: flex; flex-direction: column; gap: 0.75rem;">
+ 
+    {% if producer_subtotals %}
+    <div id="producer-subtotals">
+      <p style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem;">Subtotals by Producer</p>
+      {% for producer, subtotal in producer_subtotals.items %}
+      <div style="display: flex; justify-content: space-between; font-size: 0.875rem; padding: 0.2rem 0;" data-producer="{{ producer }}">
+        <span style="color: var(--muted);">{{ producer }}</span>
+        <span class="producer-subtotal">&pound;{{ subtotal }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="border-top: 1px solid var(--border); padding-top: 0.75rem;"></div>
+    {% endif %}
+ 
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-weight: 600;">Total</span>
+      <span class="detail-price cart-total" style="margin: 0;">&pound;{{ total }}</span>
+    </div>
+ 
+    <button class="btn" style="width: 100%; text-align: center;">Checkout</button>
+ 
   </div>
 </div>
-
+ 
 {% else %}
-
-<div class="card">
+ 
+<div class="card empty-state">
   <p>Your cart is empty.</p>
-  <a href="{% url 'marketplace' %}" class="btn btn-primary" style="margin-top:1rem;">Browse Products</a>
+  <a href="{% url 'marketplace' %}" class="btn btn-primary">Browse Products</a>
 </div>
-
+ 
 {% endif %}
-
+ 
+<script>
+function updateCart(input, productId) {
+  const form = input.closest('form');
+  const data = new FormData(form);
+ 
+  fetch(form.action, {
+    method: 'POST',
+    body: data,
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(res => res.json())
+  .then(data => {
+    // Update this row's subtotal
+    const row = document.querySelector(`tr[data-product-id="${productId}"]`);
+    row.querySelector('.item-subtotal').textContent = '£' + data.item_subtotal;
+ 
+    // Update producer subtotals
+    Object.entries(data.producer_subtotals).forEach(function(entry) {
+      var producer = entry[0];
+      var subtotal = entry[1];
+      var producerRow = document.querySelector('#producer-subtotals [data-producer="' + producer + '"]');
+      if (producerRow) {
+        producerRow.querySelector('.producer-subtotal').textContent = '£' + subtotal;
+      }
+    });
+ 
+    // Update cart total
+    document.querySelector('.cart-total').textContent = '£' + data.total;
+  })
+  .catch(() => {
+    // Fallback to full page reload if fetch fails
+    form.submit();
+  });
+}
+</script>
+ 
 {% endblock %}
