@@ -43,6 +43,7 @@ def update_cart(request, product_id):
                 "item_subtotal": f"{item_subtotal:.2f}",
                 "producer_subtotals": {k: f"{v:.2f}" for k, v in producer_subtotals.items()},
                 "total": f"{total:.2f}",
+                'cart_count': sum(cart.cart.values()),
             })
  
     return redirect("view_cart")

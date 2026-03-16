@@ -101,6 +101,7 @@ function updateCart(input, productId) {
     // Update this row's subtotal
     const row = document.querySelector(`tr[data-product-id="${productId}"]`);
     row.querySelector('.item-subtotal').textContent = '£' + data.item_subtotal;
+    
  
     // Update producer subtotals
     Object.entries(data.producer_subtotals).forEach(function(entry) {
@@ -114,6 +115,9 @@ function updateCart(input, productId) {
  
     // Update cart total
     document.querySelector('.cart-total').textContent = '£' + data.total;
+    const cartCount = document.getElementById('cart-count');
+    if (cartCount) cartCount.textContent = data.cart_count;
+    
   })
   .catch(() => {
     // Fallback to full page reload if fetch fails
