@@ -131,6 +131,35 @@ These features provide the foundation for further development in future sprints.
 
 ---
 
+## Demo Data
+
+Fixtures are provided for all four apps to allow the system to be populated with realistic demo data for development and testing.
+
+
+### Loading Fixtures
+
+``` bash
+docker compose exec web python manage.py loaddata accounts/fixtures/accounts.json producers/fixtures/producers.json products/fixtures/products.json
+```
+
+### Demo Accounts
+
+All accounts use the password **`demo1234`**.
+
+Usernames: 
+- admin (superuser): Full admin access
+- fredsfarm (producer): Fred's Farm, North Yorkshire
+- greenvalley (producer) : Green Valley Dairy, Herefordshire
+- sunshineorganics (producer): Sunshine Organics, Devon
+- alice : Demo customer account
+- bob: Demo customer account
+
+### Demo Products
+
+10 products are loaded across all five categories: Vegetables, Dairy, Bakery, Preserves, and Seasonal Specialities.
+
+---
+
 ## Running the Project
 
 ### Prerequisites

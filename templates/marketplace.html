@@ -1,13 +1,45 @@
 {% extends "base.html" %}
-
 {% block title %}Marketplace{% endblock %}
-
 {% block content %}
+ 
 <div class="page-header">
   <h1>Marketplace</h1>
   <p>Browse fresh produce from local Bristol producers.</p>
 </div>
-
+ 
+<form method="get" style="margin-bottom: 1.5rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+  <input
+    type="text"
+    name="q"
+    placeholder="Search products..."
+    value="{{ query }}"
+    style="flex: 1; min-width: 200px; max-width: 360px;"
+  >
+  <select name="category" style="min-width: 160px;">
+    <option value="">All Categories</option>
+    {% for value, label in categories %}
+    <option value="{{ value }}" {% if selected_category == value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; text-transform: none; font-weight: 400; color: var(--text); cursor: pointer;">
+    <input type="checkbox" name="organic" {% if organic_only %}checked{% endif %} style="width: auto;">
+    Organic only
+  </label>
+  <button type="submit" class="btn btn-sm">Search</button>
+  {% if query or selected_category or organic_only %}
+  <a href="{% url 'marketplace' %}" class="btn btn-secondary btn-sm">Clear</a>
+  {% endif %}
+</form>
+ 
+{% if query or selected_category or organic_only %}
+<p style="font-size: 0.875rem; color: var(--muted); margin-bottom: 1rem;">
+  {{ products|length }} result{{ products|length|pluralize }} found
+  {% if query %} for "<strong>{{ query }}</strong>"{% endif %}
+  {% if selected_category %} in <strong>{{ selected_category }}</strong>{% endif %}
+  {% if organic_only %} &middot; organic only{% endif %}
+</p>
+{% endif %}
+ 
 {% if products %}
   <div class="product-grid">
     {% for product in products %}
@@ -22,7 +54,7 @@
       <p class="meta" style="flex:1;">{{ product.description|truncatewords:15 }}</p>
       <p class="price">
         {% if product.discount_price %}
-          <span style="text-decoration:line-through; color:var(--text-muted); font-size:0.85rem;">£{{ product.price }}</span>
+          <span style="text-decoration:line-through; color:var(--muted); font-size:0.85rem;">£{{ product.price }}</span>
           £{{ product.discount_price }}
         {% else %}
           £{{ product.price }}
@@ -36,7 +68,11 @@
   </div>
 {% else %}
   <div class="card empty-state">
-    <p>No products are currently available.</p>
+    <p>No products found.</p>
+    {% if query or selected_category or organic_only %}
+    <a href="{% url 'marketplace' %}" class="btn btn-secondary" style="margin-top: 1rem;">Clear filters</a>
+    {% endif %}
   </div>
 {% endif %}
+ 
 {% endblock %}

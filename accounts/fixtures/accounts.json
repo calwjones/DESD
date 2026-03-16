@@ -1,0 +1,110 @@
+[
+  {
+    "model": "accounts.customuser",
+    "pk": 1,
+    "fields": {
+      "username": "admin",
+      "password": "pbkdf2_sha256$1200000$2FQkgH046XUkFJ1ICiZyz0$DkTaOkKjowILZb5GV2IorIpt0RUp12OGxN/yTvTFyuk=",
+      "email": "admin@desd.local",
+      "first_name": "Admin",
+      "last_name": "User",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": true,
+      "date_joined": "2026-01-01T00:00:00Z",
+      "role": "customer",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "accounts.customuser",
+    "pk": 2,
+    "fields": {
+      "username": "fredsfarm",
+      "password": "pbkdf2_sha256$1200000$2FQkgH046XUkFJ1ICiZyz0$DkTaOkKjowILZb5GV2IorIpt0RUp12OGxN/yTvTFyuk=",
+      "email": "fred@fredsfarm.co.uk",
+      "first_name": "Fred",
+      "last_name": "Harrison",
+      "is_staff": false,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2026-01-05T09:00:00Z",
+      "role": "producer",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "accounts.customuser",
+    "pk": 3,
+    "fields": {
+      "username": "greenvalley",
+      "password": "pbkdf2_sha256$1200000$2FQkgH046XUkFJ1ICiZyz0$DkTaOkKjowILZb5GV2IorIpt0RUp12OGxN/yTvTFyuk=",
+      "email": "hello@greenvalley.co.uk",
+      "first_name": "Sarah",
+      "last_name": "Green",
+      "is_staff": false,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2026-01-10T10:30:00Z",
+      "role": "producer",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "accounts.customuser",
+    "pk": 4,
+    "fields": {
+      "username": "sunshineorganics",
+      "password": "pbkdf2_sha256$1200000$2FQkgH046XUkFJ1ICiZyz0$DkTaOkKjowILZb5GV2IorIpt0RUp12OGxN/yTvTFyuk=",
+      "email": "info@sunshineorganics.co.uk",
+      "first_name": "Maya",
+      "last_name": "Patel",
+      "is_staff": false,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2026-01-15T08:00:00Z",
+      "role": "producer",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "accounts.customuser",
+    "pk": 5,
+    "fields": {
+      "username": "alice",
+      "password": "pbkdf2_sha256$1200000$2FQkgH046XUkFJ1ICiZyz0$DkTaOkKjowILZb5GV2IorIpt0RUp12OGxN/yTvTFyuk=",
+      "email": "alice@example.com",
+      "first_name": "Alice",
+      "last_name": "Thompson",
+      "is_staff": false,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2026-01-20T14:00:00Z",
+      "role": "customer",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "accounts.customuser",
+    "pk": 6,
+    "fields": {
+      "username": "bob",
+      "password": "pbkdf2_sha256$1200000$2FQkgH046XUkFJ1ICiZyz0$DkTaOkKjowILZb5GV2IorIpt0RUp12OGxN/yTvTFyuk=",
+      "email": "bob@example.com",
+      "first_name": "Bob",
+      "last_name": "Clarke",
+      "is_staff": false,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2026-01-22T11:00:00Z",
+      "role": "customer",
+      "groups": [],
+      "user_permissions": []
+    }
+  }
+]

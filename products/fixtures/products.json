@@ -1,0 +1,212 @@
+[
+  {
+    "model": "products.product",
+    "pk": 1,
+    "fields": {
+      "producer": 2,
+      "name": "Mixed Seasonal Vegetables Box",
+      "description": "A selection of whatever is freshest from the field this week — typically includes carrots, courgettes, leeks, and potatoes.",
+      "category": "vegetables",
+      "price": "12.50",
+      "stock_quantity": 30,
+      "is_available": true,
+      "is_organic": false,
+      "allergen_info": "",
+      "harvest_date": "2026-03-08",
+      "best_before_date": "2026-03-15",
+      "available_from": "2026-03-01",
+      "available_until": "2026-05-31",
+      "discount_price": null,
+      "created_at": "2026-03-01T08:00:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 2,
+    "fields": {
+      "producer": 2,
+      "name": "Heritage Potatoes (2kg)",
+      "description": "Freshly dug Maris Piper and King Edward potatoes, unwashed for longer shelf life.",
+      "category": "vegetables",
+      "price": "3.50",
+      "stock_quantity": 100,
+      "is_available": true,
+      "is_organic": false,
+      "allergen_info": "",
+      "harvest_date": "2026-03-07",
+      "best_before_date": "2026-03-28",
+      "available_from": null,
+      "available_until": null,
+      "discount_price": null,
+      "created_at": "2026-03-01T08:05:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 3,
+    "fields": {
+      "producer": 2,
+      "name": "Free-Range Eggs (dozen)",
+      "description": "Mixed-size eggs from our flock of Warrens and Bluebells, collected daily.",
+      "category": "dairy",
+      "price": "3.20",
+      "stock_quantity": 60,
+      "is_available": true,
+      "is_organic": false,
+      "allergen_info": "Eggs",
+      "harvest_date": "2026-03-10",
+      "best_before_date": "2026-03-31",
+      "available_from": null,
+      "available_until": null,
+      "discount_price": null,
+      "created_at": "2026-03-01T08:10:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 4,
+    "fields": {
+      "producer": 3,
+      "name": "Whole Milk (2 litres)",
+      "description": "Non-homogenised whole milk from our own Friesian herd, glass bottle included.",
+      "category": "dairy",
+      "price": "2.40",
+      "stock_quantity": 80,
+      "is_available": true,
+      "is_organic": false,
+      "allergen_info": "Milk",
+      "harvest_date": "2026-03-10",
+      "best_before_date": "2026-03-17",
+      "available_from": null,
+      "available_until": null,
+      "discount_price": null,
+      "created_at": "2026-03-02T09:00:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 5,
+    "fields": {
+      "producer": 3,
+      "name": "Mature Cheddar (250g)",
+      "description": "12-month aged cheddar made entirely from our own milk. Rich, crumbly and slightly sharp.",
+      "category": "dairy",
+      "price": "5.80",
+      "stock_quantity": 40,
+      "is_available": true,
+      "is_organic": false,
+      "allergen_info": "Milk",
+      "harvest_date": null,
+      "best_before_date": "2026-06-01",
+      "available_from": null,
+      "available_until": null,
+      "discount_price": "4.99",
+      "created_at": "2026-03-02T09:05:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 6,
+    "fields": {
+      "producer": 3,
+      "name": "Natural Yoghurt (500g)",
+      "description": "Thick, live-culture natural yoghurt. No added sugar or stabilisers.",
+      "category": "dairy",
+      "price": "2.90",
+      "stock_quantity": 50,
+      "is_available": true,
+      "is_organic": false,
+      "allergen_info": "Milk",
+      "harvest_date": null,
+      "best_before_date": "2026-03-25",
+      "available_from": null,
+      "available_until": null,
+      "discount_price": null,
+      "created_at": "2026-03-02T09:10:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 7,
+    "fields": {
+      "producer": 4,
+      "name": "Organic Sourdough Loaf",
+      "description": "Long-ferment sourdough baked in a wood-fired oven using our own milled stoneground flour.",
+      "category": "bakery",
+      "price": "5.50",
+      "stock_quantity": 20,
+      "is_available": true,
+      "is_organic": true,
+      "allergen_info": "Gluten, Wheat",
+      "harvest_date": null,
+      "best_before_date": "2026-03-14",
+      "available_from": null,
+      "available_until": null,
+      "discount_price": null,
+      "created_at": "2026-03-03T07:00:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 8,
+    "fields": {
+      "producer": 4,
+      "name": "Strawberry Jam (340g)",
+      "description": "Made with organic strawberries grown on the farm. High fruit content, low sugar recipe.",
+      "category": "preserves",
+      "price": "4.20",
+      "stock_quantity": 35,
+      "is_available": true,
+      "is_organic": true,
+      "allergen_info": "",
+      "harvest_date": null,
+      "best_before_date": "2027-03-01",
+      "available_from": null,
+      "available_until": null,
+      "discount_price": null,
+      "created_at": "2026-03-03T07:10:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 9,
+    "fields": {
+      "producer": 4,
+      "name": "Wild Garlic Pesto (200g)",
+      "description": "Seasonal wild garlic pesto, foraged locally and blended with organic sunflower seeds and olive oil.",
+      "category": "seasonal",
+      "price": "4.80",
+      "stock_quantity": 15,
+      "is_available": true,
+      "is_organic": true,
+      "allergen_info": "Nuts",
+      "harvest_date": "2026-03-05",
+      "best_before_date": "2026-04-05",
+      "available_from": "2026-03-01",
+      "available_until": "2026-04-30",
+      "discount_price": null,
+      "created_at": "2026-03-03T07:20:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 10,
+    "fields": {
+      "producer": 4,
+      "name": "Heritage Tomato Selection (500g)",
+      "description": "A colourful mix of organic heritage tomatoes — Black Krim, Tigerella and Yellow Pear varieties.",
+      "category": "vegetables",
+      "price": "4.00",
+      "stock_quantity": 25,
+      "is_available": true,
+      "is_organic": true,
+      "allergen_info": "",
+      "harvest_date": "2026-03-09",
+      "best_before_date": "2026-03-16",
+      "available_from": "2026-03-01",
+      "available_until": "2026-09-30",
+      "discount_price": null,
+      "created_at": "2026-03-03T07:30:00Z"
+    }
+  }
+]
