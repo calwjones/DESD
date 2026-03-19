@@ -38,6 +38,8 @@ class Order(models.Model):
 
     delivery_date = models.DateField()
 
+    delivery_address = models.TextField()
+
     def __str__(self):
         return f"Order #{self.id}"
     
