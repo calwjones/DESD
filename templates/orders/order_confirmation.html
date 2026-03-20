@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Order Confirmed{% endblock %}
+{% block content %}
+
+<div class="card" style="max-width: 600px; margin: 2rem auto; text-align: center;">
+  <h1 style="font-size: 1.3rem; margin-bottom: 0.5rem;">Order Confirmed</h1>
+  <p style="margin-bottom: 1.5rem;">Thank you for your order. Your order number is <strong>#{{ order.id }}</strong>.</p>
+
+  <div style="text-align: left;">
+    <div class="detail-grid" style="margin-bottom: 1.5rem;">
+      <div class="detail-item">
+        <label>Status</label>
+        <p>{{ order.get_status_display }}</p>
+      </div>
+      <div class="detail-item">
+        <label>Delivery Date</label>
+        <p>{{ order.delivery_date }}</p>
+      </div>
+      <div class="detail-item">
+        <label>Delivery Address</label>
+        <p>{{ order.delivery_address }}</p>
+      </div>
+      <div class="detail-item">
+        <label>Total</label>
+        <p class="detail-price" style="margin: 0;">&pound;{{ order.total }}</p>
+      </div>
+    </div>
+
+    <h2 style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.75rem;">Items</h2>
+    <table class="product-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Qty</th>
+          <th>Price</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in order.items.all %}
+        <tr>
+          <td style="font-weight: 500;">{{ item.product.name }}</td>
+          <td>{{ item.quantity }}</td>
+          <td>&pound;{{ item.price }}</td>
+          <td style="font-weight: 600; color: var(--accent);">&pound;{{ item.subtotal }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+    <a href="{% url 'marketplace' %}" class="btn">Continue Shopping</a>
+  </div>
+</div>
+
+{% endblock %}

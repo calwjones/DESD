@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Checkout{% endblock %}
+{% block content %}
+
+<div class="dashboard-header">
+  <h1>Checkout</h1>
+  <a href="{% url 'view_cart' %}" class="btn btn-secondary btn-sm">Back to Cart</a>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start;">
+
+  <div class="card">
+    <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Order Summary</h2>
+    <table class="product-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Qty</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in cart_items %}
+        <tr>
+          <td style="font-weight: 500;">{{ item.product.name }}</td>
+          <td>{{ item.quantity }}</td>
+          <td style="font-weight: 600; color: var(--accent);">&pound;{{ item.subtotal }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div style="border-top: 1px solid var(--border); margin-top: 0.75rem; padding-top: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-weight: 600;">Total</span>
+      <span class="detail-price" style="margin: 0;">&pound;{{ total }}</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Delivery Details</h2>
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+      <p>
+        {{ field.label_tag }}
+        {{ field }}
+        {% if field.help_text %}
+        <span class="helptext">{{ field.help_text }}</span>
+        {% endif %}
+        {% for error in field.errors %}
+        <span class="helptext" style="color: #900;">{{ error }}</span>
+        {% endfor %}
+      </p>
+      {% endfor %}
+      <button type="submit" class="btn" style="width: 100%; text-align: center; margin-top: 0.5rem;">Place Order</button>
+    </form>
+  </div>
+
+</div>
+
+{% endblock %}

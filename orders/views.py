@@ -1,6 +1,9 @@
 from django.shortcuts import redirect, render, get_object_or_404
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from .cart import Cart
+from .forms import CheckoutForm
+from .models import Order, OrderItem
 from products.models import Product
  
  
@@ -49,6 +52,59 @@ def update_cart(request, product_id):
     return redirect("view_cart")
  
  
+@login_required
+def checkout(request):
+    cart = Cart(request)
+
+    if not cart.cart:
+        return redirect("view_cart")
+
+    cart_items = []
+    total = 0
+    for product_id, quantity in cart.cart.items():
+        product = get_object_or_404(Product, id=product_id)
+        subtotal = product.price * quantity
+        total += subtotal
+        cart_items.append({
+            "product": product,
+            "quantity": quantity,
+            "subtotal": subtotal,
+        })
+
+    if request.method == "POST":
+        form = CheckoutForm(request.POST)
+        if form.is_valid():
+            order = Order.objects.create(
+                customer=request.user,
+                total=total,
+                delivery_date=form.cleaned_data["delivery_date"],
+                delivery_address=form.cleaned_data["delivery_address"],
+            )
+            for item in cart_items:
+                OrderItem.objects.create(
+                    order=order,
+                    product=item["product"],
+                    quantity=item["quantity"],
+                    price=item["product"].price,
+                )
+            cart.clear()
+            return redirect("order_confirmation", order_id=order.id)
+    else:
+        form = CheckoutForm()
+
+    return render(request, "orders/checkout.html", {
+        "form": form,
+        "cart_items": cart_items,
+        "total": total,
+    })
+
+
+@login_required
+def order_confirmation(request, order_id):
+    order = get_object_or_404(Order, id=order_id, customer=request.user)
+    return render(request, "orders/order_confirmation.html", {"order": order})
+
+
 def view_cart(request):
     cart = Cart(request)
     cart_items = []
