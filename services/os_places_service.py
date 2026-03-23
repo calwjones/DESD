@@ -1,0 +1,66 @@
+import math
+import requests
+ 
+ 
+class PostcodesService:
+    """
+    Service class for interacting with the postcodes.io API.
+    Handles postcode lookup and food miles calculation.
+    No API key required — completely free.
+    API docs: https://postcodes.io
+    """
+ 
+    BASE_URL = "https://api.postcodes.io/postcodes"
+ 
+    def lookup_postcode(self, postcode):
+        """
+        Look up a postcode and return address details with lat/lng.
+        Returns a dict or None if the lookup fails.
+        """
+        try:
+            response = requests.get(
+                f"{self.BASE_URL}/{postcode}",
+                timeout=5,
+            )
+            response.raise_for_status()
+            result = response.json().get('result', {})
+ 
+            if not result:
+                return None
+ 
+            return {
+                'address': f"{result.get('admin_ward', '')}, {result.get('admin_district', '')}",
+                'town': result.get('admin_district', ''),
+                'postcode': result.get('postcode', ''),
+                'latitude': result.get('latitude'),
+                'longitude': result.get('longitude'),
+            }
+ 
+        except requests.RequestException:
+            return None
+ 
+    def is_valid(self, postcode):
+        """
+        Check whether a postcode is valid.
+        """
+        try:
+            response = requests.get(
+                f"{self.BASE_URL}/{postcode}/validate",
+                timeout=5,
+            )
+            return response.json().get('result', False)
+        except requests.RequestException:
+            return False
+ 
+    @staticmethod
+    def calculate_food_miles(lat1, lon1, lat2, lon2):
+        """
+        Calculate straight-line distance in miles between two lat/lng points
+        using the Haversine formula.
+        """
+        R = 3958.8  # Earth radius in miles
+        lat1, lon1, lat2, lon2 = map(math.radians, [float(lat1), float(lon1), float(lat2), float(lon2)])
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+        return round(R * 2 * math.asin(math.sqrt(a)), 1)

@@ -1,14 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Checkout{% endblock %}
 {% block content %}
-
+ 
 <div class="dashboard-header">
   <h1>Checkout</h1>
   <a href="{% url 'view_cart' %}" class="btn btn-secondary btn-sm">Back to Cart</a>
 </div>
-
+ 
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start;">
-
+ 
+  <!-- Order Summary -->
   <div class="card">
     <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Order Summary</h2>
     <table class="product-table">
@@ -34,7 +35,8 @@
       <span class="detail-price" style="margin: 0;">&pound;{{ total }}</span>
     </div>
   </div>
-
+ 
+  <!-- Delivery Details -->
   <div class="card">
     <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Delivery Details</h2>
     <form method="post">
@@ -51,10 +53,12 @@
         {% endfor %}
       </p>
       {% endfor %}
-      <button type="submit" class="btn" style="width: 100%; text-align: center; margin-top: 0.5rem;">Place Order</button>
+      <button type="submit" class="btn" style="width: 100%; text-align: center; margin-top: 0.5rem;">
+        Place Order
+      </button>
     </form>
   </div>
-
+ 
 </div>
-
+ 
 {% endblock %}
