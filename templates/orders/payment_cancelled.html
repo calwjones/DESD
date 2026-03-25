@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Payment Cancelled{% endblock %}
+{% block content %}
+
+<div class="card" style="max-width: 500px; margin: 2rem auto; text-align: center;">
+  <h1 style="font-size: 1.3rem; margin-bottom: 0.5rem;">Payment Cancelled</h1>
+  <p style="margin-bottom: 1.5rem;">Your payment was not completed. No charge has been made.</p>
+  <div style="display: flex; gap: 0.75rem; justify-content: center;">
+    <a href="{% url 'view_cart' %}" class="btn btn-secondary">Back to Cart</a>
+    <a href="{% url 'marketplace' %}" class="btn">Continue Shopping</a>
+  </div>
+</div>
+
+{% endblock %}

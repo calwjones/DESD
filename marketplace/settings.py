@@ -136,3 +136,8 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
 LOGIN_URL = '/accounts/login/'
+
+# Stripe
+STRIPE_PUBLIC_KEY = os.environ.get('STRIPE_PUBLIC_KEY', '')
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
