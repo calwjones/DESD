@@ -5,6 +5,7 @@ from .cart import Cart
 from .forms import CheckoutForm
 from .models import Order, OrderItem
 from products.models import Product
+from services.os_places_service import PostcodesService
  
  
 def add_to_cart(request, product_id):
@@ -25,12 +26,10 @@ def update_cart(request, product_id):
         cart = Cart(request)
         cart.update(product_id, quantity)
  
-        # If AJAX request, return JSON instead of redirecting
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             product = get_object_or_404(Product, id=product_id)
             item_subtotal = float(product.price * quantity)
  
-            # Recalculate full cart totals
             producer_subtotals = {}
             total = 0
             for pid, qty in cart.cart.items():
@@ -55,10 +54,11 @@ def update_cart(request, product_id):
 @login_required
 def checkout(request):
     cart = Cart(request)
-
+ 
     if not cart.cart:
         return redirect("view_cart")
-
+ 
+    # Build cart items and total
     cart_items = []
     total = 0
     for product_id, quantity in cart.cart.items():
@@ -70,15 +70,44 @@ def checkout(request):
             "quantity": quantity,
             "subtotal": subtotal,
         })
-
+ 
     if request.method == "POST":
         form = CheckoutForm(request.POST)
         if form.is_valid():
+            postcode = form.cleaned_data["postcode"]
+ 
+            # Verify postcode via postcodes.io and get lat/lng for food miles
+            service = PostcodesService()
+            location = service.lookup_postcode(postcode)
+ 
+            if not location:
+                form.add_error("postcode", "Invalid postcode — please check and try again.")
+                return render(request, "orders/checkout.html", {
+                    "form": form,
+                    "cart_items": cart_items,
+                    "total": total,
+                })
+ 
+            # Calculate food miles per producer
+            food_miles = {}
+            for item in cart_items:
+                producer_profile = getattr(item["product"].producer, "producer_profile", None)
+                if producer_profile and producer_profile.latitude:
+                    miles = service.calculate_food_miles(
+                        producer_profile.latitude,
+                        producer_profile.longitude,
+                        location["latitude"],
+                        location["longitude"],
+                    )
+                    food_miles[item["product"].producer.username] = miles
+ 
+            # Save order
+            full_address = f"{form.cleaned_data['delivery_address']}, {location['town']}, {postcode}"
             order = Order.objects.create(
                 customer=request.user,
                 total=total,
                 delivery_date=form.cleaned_data["delivery_date"],
-                delivery_address=form.cleaned_data["delivery_address"],
+                delivery_address=full_address,
             )
             for item in cart_items:
                 OrderItem.objects.create(
@@ -89,22 +118,24 @@ def checkout(request):
                 )
             cart.clear()
             return redirect("order_confirmation", order_id=order.id)
+ 
     else:
         form = CheckoutForm()
-
+ 
     return render(request, "orders/checkout.html", {
         "form": form,
         "cart_items": cart_items,
         "total": total,
     })
-
-
+ 
+ 
 @login_required
 def order_confirmation(request, order_id):
     order = get_object_or_404(Order, id=order_id, customer=request.user)
     return render(request, "orders/order_confirmation.html", {"order": order})
-
-
+ 
+ 
+@login_required
 def view_cart(request):
     cart = Cart(request)
     cart_items = []
@@ -123,12 +154,8 @@ def view_cart(request):
             "quantity": quantity,
             "subtotal": subtotal,
         })
-    return render(
-        request,
-        "orders/cart.html",
-        {
-            "cart_items": cart_items,
-            "total": total,
-            "producer_subtotals": producer_subtotals,
-        },
-    )
+    return render(request, "orders/cart.html", {
+        "cart_items": cart_items,
+        "total": total,
+        "producer_subtotals": producer_subtotals,
+    })
