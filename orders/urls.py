@@ -8,4 +8,7 @@ urlpatterns = [
     path("update/<int:product_id>/", views.update_cart, name="update_cart"),
     path("checkout/", views.checkout, name="checkout"),
     path("confirmation/<int:order_id>/", views.order_confirmation, name="order_confirmation"),
+    path("payment/success/", views.payment_success, name="payment_success"),
+    path("payment/cancel/", views.payment_cancel, name="payment_cancel"),
+    path("webhook/stripe/", views.stripe_webhook, name="stripe_webhook"),
 ]

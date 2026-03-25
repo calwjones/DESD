@@ -40,6 +40,12 @@ class Order(models.Model):
 
     delivery_address = models.TextField()
 
+    stripe_session_id = models.CharField(
+        max_length=200,
+        blank=True,
+        default=""
+    )
+
     def __str__(self):
         return f"Order #{self.id}"
     
