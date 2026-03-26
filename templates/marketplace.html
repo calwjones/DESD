@@ -31,6 +31,12 @@
   {% endif %}
 </form>
  
+{% if not customer_has_postcode %}
+<p style="font-size: 0.875rem; color: var(--muted); margin-bottom: 1rem;">
+  <a href="{% url 'accounts:update_postcode' %}" style="color: var(--accent);">Set your postcode</a> to see food miles from each producer to you.
+</p>
+{% endif %}
+
 {% if query or selected_category or organic_only %}
 <p style="font-size: 0.875rem; color: var(--muted); margin-bottom: 1rem;">
   {{ products|length }} result{{ products|length|pluralize }} found
@@ -52,6 +58,9 @@
       </div>
       <p class="meta">{{ product.get_category_display }} &middot; {{ product.producer.username }}</p>
       <p class="meta" style="flex:1;">{{ product.description|truncatewords:15 }}</p>
+      {% if product.food_miles is not None %}
+      <p class="meta" style="color: var(--accent); font-size: 0.8rem;">{{ product.food_miles }} miles away</p>
+      {% endif %}
       <p class="price">
         {% if product.discount_price %}
           <span style="text-decoration:line-through; color:var(--muted); font-size:0.85rem;">£{{ product.price }}</span>
@@ -60,8 +69,19 @@
           £{{ product.price }}
         {% endif %}
       </p>
-      <div class="actions">
-        <a href="{% url 'products:detail' product.pk %}" class="btn btn-sm">View</a>
+      <div class="actions" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        {% if product.is_available and product.stock_quantity > 0 %}
+        <form method="post" action="{% url 'add_to_cart' product.pk %}" style="display: flex; gap: 0.4rem; align-items: center;">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <input type="number" name="quantity" value="1" min="1" max="{{ product.stock_quantity }}"
+                 style="width: 3.5rem; padding: 0.3rem 0.4rem; font-size: 0.85rem;">
+          <button type="submit" class="btn btn-sm">Add to Cart</button>
+        </form>
+        {% else %}
+        <button class="btn btn-sm btn-secondary" disabled>Out of Stock</button>
+        {% endif %}
+        <a href="{% url 'products:detail' product.pk %}" class="btn btn-sm btn-secondary">View</a>
       </div>
     </div>
     {% endfor %}

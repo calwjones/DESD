@@ -8,7 +8,9 @@
       "bio": "Family-run farm in the Yorkshire Dales producing seasonal vegetables and free-range eggs for over 30 years.",
       "postcode": "BS8 1TH",
       "contact_email": "fred@fredsfarm.co.uk",
-      "website": "https://fredsfarm.co.uk"
+      "website": "https://fredsfarm.co.uk",
+      "latitude": "51.459577",
+      "longitude": "-2.603078"
     }
   },
   {
@@ -20,7 +22,9 @@
       "bio": "Award-winning artisan dairy producing fresh milk, cheeses and yoghurts from our herd of grass-fed Friesians.",
       "postcode": "BS1 1AA",
       "contact_email": "hello@greenvalley.co.uk",
-      "website": "https://greenvalleydairy.co.uk"
+      "website": "https://greenvalleydairy.co.uk",
+      "latitude": "51.451489",
+      "longitude": "-2.597697"
     }
   },
   {
@@ -32,7 +36,9 @@
       "bio": "Certified organic growers specialising in heritage varieties of fruit and vegetables, homemade preserves and seasonal baked goods.",
       "postcode": "BS8 1TH",
       "contact_email": "info@sunshineorganics.co.uk",
-      "website": "https://sunshineorganics.co.uk"
+      "website": "https://sunshineorganics.co.uk",
+      "latitude": "51.459577",
+      "longitude": "-2.603078"
     }
   }
 ]

@@ -55,4 +55,97 @@
     <a href="{% url 'products:add' %}" class="btn">Add your first product</a>
   </div>
 {% endif %}
+
+{# ── Orders to fulfil ─────────────────────────────────────────── #}
+<div class="dashboard-header" style="margin-top: 2.5rem;">
+  <h2 style="font-size: 1.1rem; font-weight: 600;">Orders to Fulfil</h2>
+</div>
+
+{% if orders %}
+  {% for order in orders %}
+  <div class="card" style="margin-bottom: 1.25rem;">
+    <div class="detail-grid" style="margin-bottom: 1rem;">
+      <div class="detail-item">
+        <label>Order</label>
+        <p><strong>#{{ order.id }}</strong></p>
+      </div>
+      <div class="detail-item">
+        <label>Customer</label>
+        <p>{{ order.customer.username }}</p>
+      </div>
+      <div class="detail-item">
+        <label>Status</label>
+        <p>
+          {% if order.status == 'confirmed' %}
+            <span class="badge badge-green">{{ order.get_status_display }}</span>
+          {% else %}
+            <span class="badge" style="background:var(--accent);color:#fff;">{{ order.get_status_display }}</span>
+          {% endif %}
+        </p>
+      </div>
+      <div class="detail-item">
+        <label>Delivery Date</label>
+        <p>{{ order.delivery_date|date:"d M Y" }}</p>
+      </div>
+    </div>
+
+    <h3 style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.6rem;">Items to Pack</h3>
+
+    <form method="post" action="{% url 'pack_all_items' order.id %}" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-secondary btn-sm" style="margin-bottom: 0.75rem;"
+              onclick="document.querySelectorAll('.item-check-{{ order.id }}').forEach(cb => cb.checked = true)">
+        Select All
+      </button>
+    </form>
+
+    <table class="product-table" style="margin-bottom: 1rem;">
+      <thead>
+        <tr>
+          <th>Packed</th>
+          <th>Product</th>
+          <th>Qty</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in order.producer_items %}
+        <tr>
+          <td>
+            <form method="post" action="{% url 'toggle_item_packed' item.id %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm {% if item.is_packed %}badge-green{% else %}btn-secondary{% endif %}"
+                      style="padding: 0.2rem 0.6rem; font-size: 0.75rem;">
+                {% if item.is_packed %}&#10003; Packed{% else %}Pack{% endif %}
+              </button>
+            </form>
+          </td>
+          <td>{{ item.product.name }}</td>
+          <td>{{ item.quantity }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="actions">
+      {% if order.status == 'confirmed' %}
+        <form method="post" action="{% url 'mark_order_ready' order.id %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-secondary">Mark as Ready</button>
+        </form>
+      {% endif %}
+      {% if order.status == 'processing' %}
+        <form method="post" action="{% url 'ship_order' order.id %}">
+          {% csrf_token %}
+          <button type="submit" class="btn">Ship Order</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="card empty-state">
+    <p>No active orders to fulfil.</p>
+  </div>
+{% endif %}
+
 {% endblock %}

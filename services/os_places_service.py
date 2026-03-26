@@ -1,7 +1,7 @@
 import math
 import requests
- 
- 
+
+
 class PostcodesService:
     """
     Service class for interacting with the postcodes.io API.
@@ -9,25 +9,45 @@ class PostcodesService:
     No API key required — completely free.
     API docs: https://postcodes.io
     """
- 
+
     BASE_URL = "https://api.postcodes.io/postcodes"
- 
+
+    # Sentinel returned when the API cannot be reached (network/timeout)
+    NETWORK_ERROR = "POSTCODE_NETWORK_ERROR"
+
+    @staticmethod
+    def _normalise(postcode):
+        clean = postcode.strip().upper().replace(" ", "")
+        # Re-insert space before the last 3 chars (inward code is always 3 chars)
+        # e.g. BS160HT → BS16 0HT, TA27DW → TA2 7DW
+        if len(clean) >= 5:
+            return f"{clean[:-3]} {clean[-3:]}"
+        return clean
+
     def lookup_postcode(self, postcode):
         """
         Look up a postcode and return address details with lat/lng.
-        Returns a dict or None if the lookup fails.
+        Returns:
+          dict          — success
+          None          — postcode not found / invalid (HTTP 404)
+          NETWORK_ERROR — could not reach the API (connection/timeout)
         """
         try:
             response = requests.get(
-                f"{self.BASE_URL}/{postcode}",
+                f"{self.BASE_URL}/{self._normalise(postcode)}",
                 timeout=5,
             )
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            return self.NETWORK_ERROR
+
+        if response.status_code == 404:
+            return None
+
+        try:
             response.raise_for_status()
             result = response.json().get('result', {})
- 
             if not result:
                 return None
- 
             return {
                 'address': f"{result.get('admin_ward', '')}, {result.get('admin_district', '')}",
                 'town': result.get('admin_district', ''),
@@ -35,23 +55,22 @@ class PostcodesService:
                 'latitude': result.get('latitude'),
                 'longitude': result.get('longitude'),
             }
- 
         except requests.RequestException:
-            return None
- 
+            return self.NETWORK_ERROR
+
     def is_valid(self, postcode):
         """
         Check whether a postcode is valid.
         """
         try:
             response = requests.get(
-                f"{self.BASE_URL}/{postcode}/validate",
+                f"{self.BASE_URL}/{self._normalise(postcode)}/validate",
                 timeout=5,
             )
             return response.json().get('result', False)
         except requests.RequestException:
             return False
- 
+
     @staticmethod
     def calculate_food_miles(lat1, lon1, lat2, lon2):
         """

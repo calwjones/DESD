@@ -11,4 +11,9 @@ urlpatterns = [
     path("payment/success/", views.payment_success, name="payment_success"),
     path("payment/cancel/", views.payment_cancel, name="payment_cancel"),
     path("webhook/stripe/", views.stripe_webhook, name="stripe_webhook"),
+    path("history/", views.order_history, name="order_history"),
+    path("item/<int:item_id>/toggle-packed/", views.toggle_item_packed, name="toggle_item_packed"),
+    path("order/<int:order_id>/pack-all/", views.pack_all_items, name="pack_all_items"),
+    path("order/<int:order_id>/mark-ready/", views.mark_order_ready, name="mark_order_ready"),
+    path("order/<int:order_id>/ship/", views.ship_order, name="ship_order"),
 ]

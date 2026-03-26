@@ -46,6 +46,12 @@ class Order(models.Model):
         default=""
     )
 
+    tracking_number = models.CharField(
+        max_length=50,
+        blank=True,
+        default=""
+    )
+
     def __str__(self):
         return f"Order #{self.id}"
     
@@ -63,6 +69,8 @@ class OrderItem(models.Model):
     )
 
     quantity = models.PositiveIntegerField()
+
+    is_packed = models.BooleanField(default=False)
 
     price = models.DecimalField(
         max_digits=10,

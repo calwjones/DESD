@@ -33,6 +33,9 @@ services:
       - .:/app
     ports:
       - "8089:8089"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     depends_on:
       db:
         condition: service_healthy
