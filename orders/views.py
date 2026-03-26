@@ -99,17 +99,11 @@ def checkout(request):
         username = item["product"].producer.username
         if username not in producers_data:
             producer_profile = getattr(item["product"].producer, "producer_profile", None)
-            food_miles = None
-            if request.user.latitude and producer_profile and producer_profile.latitude:
-                food_miles = PostcodesService.calculate_food_miles(
-                    request.user.latitude, request.user.longitude,
-                    producer_profile.latitude, producer_profile.longitude,
-                )
             producers_data[username] = {
                 "name": getattr(producer_profile, "business_name", username),
                 "items": [],
                 "subtotal": 0,
-                "food_miles": food_miles,
+                "food_miles": PostcodesService.get_food_miles(request.user, item["product"].producer),
             }
         producers_data[username]["items"].append(item)
         producers_data[username]["subtotal"] += item["subtotal"]

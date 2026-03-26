@@ -20,7 +20,13 @@ def edit_profile(request):
             updated_profile = form.save(commit=False)
             if updated_profile.postcode:
                 location = PostcodesService().lookup_postcode(updated_profile.postcode)
-                if location:
+                if location == PostcodesService.NETWORK_ERROR:
+                    form.add_error('postcode', 'Could not reach the postcode service — please try again later.')
+                    return render(request, 'producers/profile_edit.html', {'form': form})
+                elif not location:
+                    form.add_error('postcode', 'Invalid postcode — please check and try again.')
+                    return render(request, 'producers/profile_edit.html', {'form': form})
+                else:
                     updated_profile.latitude = location['latitude']
                     updated_profile.longitude = location['longitude']
             updated_profile.save()

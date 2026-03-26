@@ -83,3 +83,17 @@ class PostcodesService:
         dlon = lon2 - lon1
         a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
         return round(R * 2 * math.asin(math.sqrt(a)), 1)
+
+    @staticmethod
+    def get_food_miles(user, producer):
+        """
+        Calculate food miles between a customer and a producer.
+        Returns the distance in miles, or None if either lacks coordinates.
+        """
+        producer_profile = getattr(producer, 'producer_profile', None)
+        if not user.latitude or not producer_profile or not producer_profile.latitude:
+            return None
+        return PostcodesService.calculate_food_miles(
+            user.latitude, user.longitude,
+            producer_profile.latitude, producer_profile.longitude,
+        )

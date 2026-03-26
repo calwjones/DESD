@@ -30,19 +30,8 @@ def marketplace_view(request):
 
     # Attach food_miles to each product if customer has a saved postcode
     products = list(products)
-    if request.user.latitude:
-        for product in products:
-            producer_profile = getattr(product.producer, 'producer_profile', None)
-            if producer_profile and producer_profile.latitude:
-                product.food_miles = PostcodesService.calculate_food_miles(
-                    request.user.latitude, request.user.longitude,
-                    producer_profile.latitude, producer_profile.longitude,
-                )
-            else:
-                product.food_miles = None
-    else:
-        for product in products:
-            product.food_miles = None
+    for product in products:
+        product.food_miles = PostcodesService.get_food_miles(request.user, product.producer)
 
     categories = Product.CATEGORY_CHOICES
 
