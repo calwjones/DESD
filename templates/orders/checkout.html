@@ -12,24 +12,33 @@
   <!-- Order Summary -->
   <div class="card">
     <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Order Summary</h2>
-    <table class="product-table">
-      <thead>
-        <tr>
-          <th>Product</th>
-          <th>Qty</th>
-          <th>Subtotal</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item in cart_items %}
-        <tr>
-          <td style="font-weight: 500;">{{ item.product.name }}</td>
-          <td>{{ item.quantity }}</td>
-          <td style="font-weight: 600; color: var(--accent);">&pound;{{ item.subtotal }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+
+    {% for username, producer in producers_data.items %}
+    <div style="margin-bottom: 1rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+        <span style="font-weight: 600; font-size: 0.875rem;">{{ producer.name }}</span>
+        {% if producer.food_miles is not None %}
+        <span style="font-size: 0.8rem; color: var(--accent);">{{ producer.food_miles }} miles away</span>
+        {% endif %}
+      </div>
+      <table class="product-table">
+        <tbody>
+          {% for item in producer.items %}
+          <tr>
+            <td style="font-weight: 500;">{{ item.product.name }}</td>
+            <td>x{{ item.quantity }}</td>
+            <td style="font-weight: 600; color: var(--accent);">&pound;{{ item.subtotal }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div style="text-align: right; font-size: 0.85rem; color: var(--muted); margin-top: 0.25rem;">
+        Subtotal: &pound;{{ producer.subtotal }}
+      </div>
+    </div>
+    {% if not forloop.last %}<hr style="border: none; border-top: 1px solid var(--border); margin: 0.75rem 0;">{% endif %}
+    {% endfor %}
+
     <div style="border-top: 1px solid var(--border); margin-top: 0.75rem; padding-top: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
       <span style="font-weight: 600;">Total</span>
       <span class="detail-price" style="margin: 0;">&pound;{{ total }}</span>
@@ -39,6 +48,12 @@
   <!-- Delivery Details -->
   <div class="card">
     <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Delivery Details</h2>
+    {% if request.user.postcode %}
+    <p class="meta" style="margin-bottom: 1rem;">
+      Postcode pre-filled from your profile.
+      <a href="{% url 'accounts:update_postcode' %}" style="color: var(--accent);">Change saved postcode</a>
+    </p>
+    {% endif %}
     <form method="post">
       {% csrf_token %}
       {% for field in form %}

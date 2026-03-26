@@ -4,12 +4,25 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import ProductForm
 from .models import Product
+from services.os_places_service import PostcodesService
 
 
 @login_required
 def product_detail(request, pk):
     product = get_object_or_404(Product, pk=pk)
-    return render(request, 'products/product_detail.html', {'product': product})
+    food_miles = None
+    if request.user.latitude:
+        producer_profile = getattr(product.producer, 'producer_profile', None)
+        if producer_profile and producer_profile.latitude:
+            food_miles = PostcodesService.calculate_food_miles(
+                request.user.latitude, request.user.longitude,
+                producer_profile.latitude, producer_profile.longitude,
+            )
+    return render(request, 'products/product_detail.html', {
+        'product': product,
+        'food_miles': food_miles,
+        'customer_has_postcode': bool(request.user.postcode),
+    })
 
 
 @login_required

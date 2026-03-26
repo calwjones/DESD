@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Set Your Postcode{% endblock %}
+{% block content %}
+
+<div class="card" style="max-width: 480px; margin: 2rem auto;">
+  <h1 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem;">Your Postcode</h1>
+  <p class="meta" style="margin-bottom: 1.5rem;">
+    We use this to calculate food miles between you and each producer.
+    Entirely optional — leave blank if you'd prefer not to share it.
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    {% for field in form %}
+    <p>
+      {{ field.label_tag }}
+      {{ field }}
+      {% if field.help_text %}
+        <span class="helptext">{{ field.help_text }}</span>
+      {% endif %}
+      {% for error in field.errors %}
+        <span class="helptext" style="color: #900;">{{ error }}</span>
+      {% endfor %}
+    </p>
+    {% endfor %}
+    <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+      <button type="submit" class="btn">Save Postcode</button>
+      <a href="{% url 'marketplace' %}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

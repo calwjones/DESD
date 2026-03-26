@@ -37,6 +37,17 @@
       <label>Stock</label>
       <p>{{ product.stock_quantity }} units</p>
     </div>
+    {% if food_miles is not None %}
+    <div class="detail-item">
+      <label>Food Miles</label>
+      <p style="color: var(--accent); font-weight: 600;">{{ food_miles }} miles</p>
+    </div>
+    {% elif not customer_has_postcode %}
+    <div class="detail-item">
+      <label>Food Miles</label>
+      <p><a href="{% url 'accounts:update_postcode' %}" style="color: var(--accent);">Set your postcode</a> to see this</p>
+    </div>
+    {% endif %}
     {% if product.allergen_info %}
     <div class="detail-item">
       <label>Allergen Info</label>
@@ -72,9 +83,14 @@
 <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);">
 
   {% if product.is_available and product.stock_quantity > 0 %}
-    <a href="{% url 'add_to_cart' product.id %}" class="btn btn-primary">
-      Add to Cart
-    </a>
+    <form method="post" action="{% url 'add_to_cart' product.id %}" style="display: inline-flex; gap: 0.5rem; align-items: center;">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <label for="qty" style="font-size: 0.875rem; font-weight: 500;">Qty:</label>
+      <input type="number" id="qty" name="quantity" value="1" min="1" max="{{ product.stock_quantity }}"
+             style="width: 4rem; padding: 0.4rem 0.5rem;">
+      <button type="submit" class="btn btn-primary">Add to Cart</button>
+    </form>
   {% else %}
     <button class="btn btn-secondary" disabled>
       Out of Stock

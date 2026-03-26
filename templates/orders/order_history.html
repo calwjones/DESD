@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}My Orders{% endblock %}
+{% block content %}
+
+<div class="dashboard-header">
+  <h1>My Orders</h1>
+</div>
+
+{% if orders %}
+  {% for order in orders %}
+  <div class="card" style="margin-bottom: 1.25rem;">
+    <div class="detail-grid" style="margin-bottom: 1rem;">
+      <div class="detail-item">
+        <label>Order</label>
+        <p><strong>#{{ order.id }}</strong></p>
+      </div>
+      <div class="detail-item">
+        <label>Status</label>
+        <p>
+          {% if order.status == 'confirmed' %}
+            <span class="badge badge-green">{{ order.get_status_display }}</span>
+          {% elif order.status == 'processing' %}
+            <span class="badge" style="background:var(--accent);color:#fff;">{{ order.get_status_display }}</span>
+          {% elif order.status == 'dispatched' %}
+            <span class="badge" style="background:#7c3aed;color:#fff;">{{ order.get_status_display }}</span>
+          {% elif order.status == 'delivered' %}
+            <span class="badge badge-green">{{ order.get_status_display }}</span>
+          {% elif order.status == 'cancelled' or order.status == 'payment_failed' %}
+            <span class="badge badge-grey">{{ order.get_status_display }}</span>
+          {% else %}
+            <span class="badge badge-grey">{{ order.get_status_display }}</span>
+          {% endif %}
+        </p>
+      </div>
+      <div class="detail-item">
+        <label>Placed</label>
+        <p>{{ order.created_at|date:"d M Y" }}</p>
+      </div>
+      <div class="detail-item">
+        <label>Delivery Date</label>
+        <p>{{ order.delivery_date|date:"d M Y" }}</p>
+      </div>
+      <div class="detail-item">
+        <label>Total</label>
+        <p class="detail-price" style="margin:0;">&pound;{{ order.total }}</p>
+      </div>
+      {% if order.tracking_number %}
+      <div class="detail-item">
+        <label>Tracking</label>
+        <p style="font-family:'DM Mono',monospace;">{{ order.tracking_number }}</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <h2 style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">Items</h2>
+    <table class="product-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Qty</th>
+          <th>Price</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in order.items.all %}
+        <tr>
+          <td>{{ item.product.name }}</td>
+          <td>{{ item.quantity }}</td>
+          <td>&pound;{{ item.price }}</td>
+          <td style="font-weight:600;color:var(--accent);">&pound;{{ item.subtotal }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="card empty-state">
+    <p>You haven't placed any orders yet.</p>
+    <a href="{% url 'marketplace' %}" class="btn">Browse the marketplace</a>
+  </div>
+{% endif %}
+
+{% endblock %}
