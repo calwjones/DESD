@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from .cart import Cart
 from .forms import CheckoutForm
 from .models import Order, OrderItem
@@ -28,6 +29,8 @@ def add_to_cart(request, product_id):
             quantity = 1
     cart.add(product_id, quantity)
     next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or "view_cart"
+    if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+        next_url = "view_cart"
     return redirect(next_url)
 
 
@@ -300,8 +303,11 @@ def pack_all_items(request, order_id):
 def mark_order_ready(request, order_id):
     if request.method != "POST" or request.user.role != 'producer':
         return redirect('producer_dashboard')
-    order = get_object_or_404(Order, id=order_id)
-    if not OrderItem.objects.filter(order=order, product__producer=request.user).exists():
+    order = get_object_or_404(Order, id=order_id, items__product__producer=request.user)
+    # Only change status if ALL producers' items are packed
+    all_packed = not order.items.filter(is_packed=False).exists()
+    if not all_packed:
+        messages.warning(request, f"Order #{order.id} still has unpacked items.")
         return redirect('producer_dashboard')
     order.status = "processing"
     order.save()
@@ -313,8 +319,9 @@ def mark_order_ready(request, order_id):
 def ship_order(request, order_id):
     if request.method != "POST" or request.user.role != 'producer':
         return redirect('producer_dashboard')
-    order = get_object_or_404(Order, id=order_id)
-    if not OrderItem.objects.filter(order=order, product__producer=request.user).exists():
+    order = get_object_or_404(Order, id=order_id, items__product__producer=request.user)
+    if order.status != "processing":
+        messages.warning(request, f"Order #{order.id} is not ready for dispatch.")
         return redirect('producer_dashboard')
     tracking = "DESD-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
     order.status = "dispatched"
