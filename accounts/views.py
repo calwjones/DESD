@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
-from .forms import RegisterForm, CustomerPostcodeForm
+from .forms import RegisterForm, CustomerProfileForm
 from services.os_places_service import PostcodesService
 
 def register_view(request):
@@ -42,27 +42,35 @@ def logout_view(request):
 
 
 @login_required
-def update_postcode_view(request):
+def profile_view(request):
     if request.user.role != 'customer':
         return redirect('producer_dashboard')
 
     if request.method == 'POST':
-        form = CustomerPostcodeForm(request.POST)
+        form = CustomerProfileForm(request.POST, instance=request.user)
         if form.is_valid():
-            service = PostcodesService()
-            location = service.lookup_postcode(form.cleaned_data['postcode'])
-            if location == PostcodesService.NETWORK_ERROR:
-                form.add_error('postcode', 'Could not reach the postcode service — please try again later.')
-            elif not location:
-                form.add_error('postcode', 'Invalid postcode — please check and try again.')
+            postcode = form.cleaned_data.get('postcode', '').strip()
+            if postcode:
+                service = PostcodesService()
+                location = service.lookup_postcode(postcode)
+                if location == PostcodesService.NETWORK_ERROR:
+                    form.add_error('postcode', 'Could not reach the postcode service — please try again later.')
+                    return render(request, 'accounts/profile.html', {'form': form})
+                elif not location:
+                    form.add_error('postcode', 'Invalid postcode — please check and try again.')
+                    return render(request, 'accounts/profile.html', {'form': form})
+                else:
+                    request.user.latitude = location['latitude']
+                    request.user.longitude = location['longitude']
+                    request.user.postcode = location['postcode']
             else:
-                request.user.postcode = location['postcode']
-                request.user.latitude = location['latitude']
-                request.user.longitude = location['longitude']
-                request.user.save()
-                messages.success(request, 'Postcode updated.')
-                return redirect('marketplace')
+                request.user.postcode = ''
+                request.user.latitude = None
+                request.user.longitude = None
+            form.save()
+            messages.success(request, 'Profile updated.')
+            return redirect('marketplace')
     else:
-        form = CustomerPostcodeForm(initial={'postcode': request.user.postcode})
+        form = CustomerProfileForm(instance=request.user)
 
-    return render(request, 'accounts/postcode.html', {'form': form})
+    return render(request, 'accounts/profile.html', {'form': form})

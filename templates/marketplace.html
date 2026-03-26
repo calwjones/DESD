@@ -33,7 +33,7 @@
  
 {% if not customer_has_postcode %}
 <p style="font-size: 0.875rem; color: var(--muted); margin-bottom: 1rem;">
-  <a href="{% url 'accounts:update_postcode' %}" style="color: var(--accent);">Set your postcode</a> to see food miles from each producer to you.
+  <a href="{% url 'accounts:profile' %}" style="color: var(--accent);">Set your postcode</a> to see food miles from each producer to you.
 </p>
 {% endif %}
 

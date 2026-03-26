@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+{% block content %}
+
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <h2>My Profile</h2>
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+      <p>
+        {{ field.label_tag }}
+        {{ field }}
+        {% if field.help_text %}
+          <span class="helptext">{{ field.help_text }}</span>
+        {% endif %}
+        {% for error in field.errors %}
+          <span class="helptext" style="color: #900;">{{ error }}</span>
+        {% endfor %}
+      </p>
+      {% endfor %}
+      <div class="form-actions">
+        <button type="submit" class="btn">Save</button>
+        <a href="{% url 'marketplace' %}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

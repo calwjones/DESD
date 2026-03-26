@@ -45,7 +45,7 @@
     {% elif not customer_has_postcode %}
     <div class="detail-item">
       <label>Food Miles</label>
-      <p><a href="{% url 'accounts:update_postcode' %}" style="color: var(--accent);">Set your postcode</a> to see this</p>
+      <p><a href="{% url 'accounts:profile' %}" style="color: var(--accent);">Set your postcode</a> to see this</p>
     </div>
     {% endif %}
     {% if product.allergen_info %}
