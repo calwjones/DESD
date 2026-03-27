@@ -19,6 +19,13 @@ from django.urls import path, include
 
 from . import views
 
+from orders.api import OrderHistoryViewSet
+from ai_logs.api import AIInteractionViewSet
+
+router = DefaultRouter()
+router.register(r'order-history', OrderHistoryViewSet, basename='order-history')
+router.register(r'ai-logs', AIInteractionViewSet)
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
@@ -27,4 +34,6 @@ urlpatterns = [
     path('', views.marketplace_view, name='marketplace'),
     path('dashboard/', views.producer_dashboard_view, name='producer_dashboard'),
     path("orders/", include("orders.urls")),
+    path('api/', include(router.urls)), 
+    path('api-auth/', include('rest_framework.urls')),
 ]
