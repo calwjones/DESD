@@ -8,9 +8,6 @@ from services.os_places_service import PostcodesService
 
 @login_required
 def marketplace_view(request):
-    if request.user.role == 'producer':
-        return redirect('producer_dashboard')
-
     products = Product.objects.filter(is_available=True).select_related(
         'producer__producer_profile'
     ).order_by('-created_at')
