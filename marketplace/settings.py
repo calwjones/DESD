@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'producers',
     'orders',
     'rest_framework',
+    'ai_logs',
 ]
 
 MIDDLEWARE = [
