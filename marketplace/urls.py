@@ -24,11 +24,12 @@ from . import views
 from orders.api import OrderHistoryViewSet
 from ai_logs.api import AIInteractionViewSet
 from rest_framework.routers import DefaultRouter
+from products.api import ProductViewSet
 
 router = DefaultRouter()
 router.register(r'order-history', OrderHistoryViewSet, basename='order-history')
 router.register(r'ai-logs', AIInteractionViewSet)
-
+router.register(r'products', ProductViewSet)
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),

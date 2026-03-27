@@ -1,15 +1,10 @@
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Docker Compose reference guide at
-# https://docs.docker.com/go/compose-spec-reference/
+# Bristol Regional Food Network - Docker Compose Configuration
+# Sprint 2: Advanced containerisation with network isolation and microservices planning
 
-# Here the instructions define your application as a service called "server".
-# This service is built from the Dockerfile in the current directory.
-# You can add other services your application may depend on here, such as a
-# database or a cache. For examples, see the Awesome Compose repository:
-# https://github.com/docker/awesome-compose
 services:
   db:
     image: postgres:15
+    container_name: brfn-db
     env_file:
       - .env
     environment:
@@ -18,6 +13,8 @@ services:
       POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d marketplace"]
       interval: 3s
@@ -26,19 +23,56 @@ services:
 
   web:
     build: .
+    container_name: brfn-web
     env_file:
       - .env
     command: python manage.py runserver 0.0.0.0:8089
     volumes:
       - .:/app
+      - media_volume:/app/media
     ports:
       - "8089:8089"
     dns:
       - 8.8.8.8
       - 8.8.4.4
+    networks:
+      - backend
     depends_on:
       db:
         condition: service_healthy
 
+  # Sprint 3 AI Services (planned architecture - not yet implemented)
+  # These services will be deployed in Sprint 3 for the Advanced AI module
+  
+  # ai-quality-service:
+  #   build: ./ai_services/quality
+  #   container_name: brfn-quality-ai
+  #   ports:
+  #     - "8001:8001"
+  #   volumes:
+  #     - media_volume:/app/media:ro  # Read-only access to product images
+  #   networks:
+  #     - backend
+  #   depends_on:
+  #     - web
+  
+  # ai-demand-service:
+  #   build: ./ai_services/demand
+  #   container_name: brfn-demand-ai
+  #   ports:
+  #     - "8002:8002"
+  #   networks:
+  #     - backend
+  #   depends_on:
+  #     - web
+
+networks:
+  backend:
+    driver: bridge
+    name: brfn-backend
+
 volumes:
   postgres_data:
+    name: brfn-postgres-data
+  media_volume:
+    name: brfn-media-storage
