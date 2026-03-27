@@ -303,10 +303,10 @@ def mark_order_ready(request, order_id):
     if request.method != "POST" or request.user.role != 'producer':
         return redirect('producer_dashboard')
     order = get_object_or_404(Order, id=order_id, items__product__producer=request.user)
-    # Only change status if ALL producers' items are packed
-    all_packed = not order.items.filter(is_packed=False).exists()
+    # Only change status if this producer's items are all packed
+    all_packed = not order.items.filter(is_packed=False, product__producer=request.user).exists()
     if not all_packed:
-        messages.warning(request, f"Order #{order.id} still has unpacked items.")
+        messages.warning(request, f"Order #{order.id} still has unpacked items. Please pack all your items first.")
         return redirect('producer_dashboard')
     order.status = "processing"
     order.save()
@@ -409,23 +409,33 @@ def _send_dispatch_email(order):
 def view_cart(request):
     cart = Cart(request)
     cart_items = []
-    producer_subtotals = {}
+    producers_info = {}  # {username: {subtotal, food_miles}}
     total = 0
     for product_id, quantity in cart.cart.items():
-        product = get_object_or_404(Product, id=product_id)
+        product = get_object_or_404(
+            Product.objects.select_related('producer__producer_profile'), id=product_id
+        )
         subtotal = product.price * quantity
         total += subtotal
         producer_name = product.producer.username
-        if producer_name not in producer_subtotals:
-            producer_subtotals[producer_name] = 0
-        producer_subtotals[producer_name] += subtotal
+        if producer_name not in producers_info:
+            producers_info[producer_name] = {
+                "subtotal": 0,
+                "food_miles": PostcodesService.get_food_miles(request.user, product.producer),
+            }
+        producers_info[producer_name]["subtotal"] += subtotal
         cart_items.append({
             "product": product,
             "quantity": quantity,
             "subtotal": subtotal,
         })
+
+    miles_values = [p["food_miles"] for p in producers_info.values() if p["food_miles"] is not None]
+    total_food_miles = round(sum(miles_values), 1) if miles_values else None
+
     return render(request, "orders/cart.html", {
         "cart_items": cart_items,
         "total": total,
-        "producer_subtotals": producer_subtotals,
+        "producers_info": producers_info,
+        "total_food_miles": total_food_miles,
     })

@@ -54,19 +54,26 @@
 <div style="display: flex; justify-content: flex-end; margin-top: 1.25rem;">
   <div class="card" style="min-width: 280px; display: flex; flex-direction: column; gap: 0.75rem;">
  
-    {% if producer_subtotals %}
+    {% if producers_info %}
     <div id="producer-subtotals">
       <p style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem;">Subtotals by Producer</p>
-      {% for producer, subtotal in producer_subtotals.items %}
+      {% for producer, info in producers_info.items %}
       <div style="display: flex; justify-content: space-between; font-size: 0.875rem; padding: 0.2rem 0;" data-producer="{{ producer }}">
-        <span style="color: var(--muted);">{{ producer }}</span>
-        <span class="producer-subtotal">&pound;{{ subtotal }}</span>
+        <span style="color: var(--muted);">{{ producer }}{% if info.food_miles %} <span style="font-size: 0.7rem;">({{ info.food_miles }} mi)</span>{% endif %}</span>
+        <span class="producer-subtotal">&pound;{{ info.subtotal }}</span>
       </div>
       {% endfor %}
     </div>
     <div style="border-top: 1px solid var(--border); padding-top: 0.75rem;"></div>
     {% endif %}
- 
+
+    {% if total_food_miles %}
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.875rem;">
+      <span style="color: var(--muted);">Total food miles</span>
+      <span style="font-weight: 600;">{{ total_food_miles }} mi</span>
+    </div>
+    {% endif %}
+
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <span style="font-weight: 600;">Total</span>
       <span class="detail-price cart-total" style="margin: 0;">&pound;{{ total }}</span>

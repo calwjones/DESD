@@ -244,6 +244,12 @@ ul.errorlist,
   border-color: #b0e0bb;
 }
 
+.messages .warning {
+  background: #fffbeb;
+  color: #854d0e;
+  border-color: #fde68a;
+}
+
 .page-header {
   margin-bottom: 1.5rem;
 }
