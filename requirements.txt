@@ -5,3 +5,4 @@ sqlparse==0.5.5
 tzdata==2025.3
 requests==2.32.5
 stripe
+djangorestframework>=3.14.0
