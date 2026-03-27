@@ -271,7 +271,12 @@ def order_history(request):
     if request.user.role != 'customer':
         return redirect('producer_dashboard')
     orders = Order.objects.filter(customer=request.user).prefetch_related('items__product').order_by('-created_at')
-    return render(request, "orders/order_history.html", {"orders": orders})
+    # Sprint 3: AI service will provide recommendations
+    recommended_products = []
+    return render(request, "orders/order_history.html", {
+        "orders": orders,
+        "recommended_products": recommended_products,
+    })
 
 
 @login_required

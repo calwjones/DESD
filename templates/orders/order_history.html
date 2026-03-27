@@ -82,4 +82,26 @@
   </div>
 {% endif %}
 
+{# ── AI Recommendations ─────────────────────────────────────── #}
+<div class="card" style="margin-top: 2rem;">
+  <h2 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem;">Recommended for You</h2>
+  {% if recommended_products %}
+    <div class="product-grid">
+      {% for product in recommended_products %}
+        <div class="product-card">
+          <h3>{{ product.name }}</h3>
+          <p class="price">£{{ product.price }}</p>
+          <a href="{% url 'products:detail' product.pk %}" class="btn btn-sm">View</a>
+        </div>
+      {% endfor %}
+    </div>
+    <p style="text-align: center; margin-top: 1rem; font-size: 0.8rem; color: var(--muted);">Based on your order history (AI-powered)</p>
+  {% else %}
+    <div class="empty-state" style="padding: 2.5rem 1.5rem; background: #f9fafb; border: 2px dashed var(--border); border-radius: var(--radius);">
+      <p style="font-weight: 600; margin-bottom: 0.25rem;">AI Recommendations Coming Soon</p>
+      <p>Place a few more orders and we'll suggest products you might like based on your purchase history.</p>
+    </div>
+  {% endif %}
+</div>
+
 {% endblock %}
