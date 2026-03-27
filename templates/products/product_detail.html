@@ -4,6 +4,12 @@
 
 {% block content %}
 <div class="card">
+  {% if product.image %}
+  <div style="margin: -1.75rem -2rem 1.5rem -2rem; overflow: hidden; border-radius: var(--radius) var(--radius) 0 0;">
+    <img src="{{ product.image.url }}" alt="{{ product.name }}" style="width: 100%; max-height: 400px; object-fit: cover; display: block;">
+  </div>
+  {% endif %}
+
   <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
     <div>
       <h1>{{ product.name }}</h1>
@@ -36,6 +42,19 @@
     <div class="detail-item">
       <label>Stock</label>
       <p>{{ product.stock_quantity }} units</p>
+    </div>
+    <div class="detail-item">
+      <label>Quality Grade</label>
+      {% if product.quality_grade %}
+        <p><span class="quality-badge grade-{{ product.quality_grade }}">Grade {{ product.quality_grade }}</span></p>
+        {% if product.quality_color_score %}
+        <p class="quality-details">
+          Color {{ product.quality_color_score }}% | Size {{ product.quality_size_score }}% | Ripeness {{ product.quality_ripeness_score }}%
+        </p>
+        {% endif %}
+      {% else %}
+        <p class="quality-pending">Quality assessment pending</p>
+      {% endif %}
     </div>
     {% if food_miles is not None %}
     <div class="detail-item">

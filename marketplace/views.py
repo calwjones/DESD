@@ -8,9 +8,6 @@ from services.os_places_service import PostcodesService
 
 @login_required
 def marketplace_view(request):
-    if request.user.role == 'producer':
-        return redirect('producer_dashboard')
-
     products = Product.objects.filter(is_available=True).select_related(
         'producer__producer_profile'
     ).order_by('-created_at')
@@ -70,4 +67,11 @@ def producer_dashboard_view(request):
             if item.product.producer_id == request.user.id
         ]
 
-    return render(request, 'dashboard.html', {'products': products, 'orders': orders})
+    # Sprint 3: AI service will provide demand forecasts
+    demand_forecasts = []
+
+    return render(request, 'dashboard.html', {
+        'products': products,
+        'orders': orders,
+        'demand_forecasts': demand_forecasts,
+    })
