@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Marketplace{% endblock %}
 {% block content %}
  
@@ -50,12 +51,24 @@
   <div class="product-grid">
     {% for product in products %}
     <div class="product-card">
+      <div class="product-image">
+        {% if product.image %}
+          <img src="{{ product.image.url }}" alt="{{ product.name }}">
+        {% else %}
+          <div class="product-image-placeholder">No image</div>
+        {% endif %}
+      </div>
       <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.5rem;">
         <h3>{{ product.name }}</h3>
         {% if product.is_organic %}
           <span class="badge badge-green">Organic</span>
         {% endif %}
       </div>
+      {% if product.quality_grade %}
+        <span class="quality-badge grade-{{ product.quality_grade }}">Grade {{ product.quality_grade }}</span>
+      {% else %}
+        <span class="quality-pending">Quality assessment pending</span>
+      {% endif %}
       <p class="meta">{{ product.get_category_display }} &middot; {{ product.producer.username }}</p>
       <p class="meta" style="flex:1;">{{ product.description|truncatewords:15 }}</p>
       {% if product.food_miles is not None %}

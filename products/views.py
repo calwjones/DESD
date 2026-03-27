@@ -23,7 +23,7 @@ def product_add(request):
     if request.user.role != 'producer':
         return redirect('marketplace')
     if request.method == 'POST':
-        form = ProductForm(request.POST)
+        form = ProductForm(request.POST, request.FILES)
         if form.is_valid():
             product = form.save(commit=False)
             product.producer = request.user
@@ -39,7 +39,7 @@ def product_add(request):
 def product_edit(request, pk):
     product = get_object_or_404(Product, pk=pk, producer=request.user)
     if request.method == 'POST':
-        form = ProductForm(request.POST, instance=product)
+        form = ProductForm(request.POST, request.FILES, instance=product)
         if form.is_valid():
             form.save()
             messages.success(request, 'Product updated.')

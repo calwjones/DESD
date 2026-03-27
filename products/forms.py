@@ -9,6 +9,7 @@ class ProductForm(forms.ModelForm):
             'name', 'description', 'category', 'price', 'stock_quantity',
             'is_available', 'is_organic', 'allergen_info', 'harvest_date',
             'best_before_date', 'available_from', 'available_until', 'discount_price',
+            'image',
         ]
         widgets = {
             'harvest_date': forms.DateInput(attrs={'type': 'date'}),
