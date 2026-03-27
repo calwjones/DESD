@@ -21,6 +21,7 @@ from . import views
 
 from orders.api import OrderHistoryViewSet
 from ai_logs.api import AIInteractionViewSet
+from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
 router.register(r'order-history', OrderHistoryViewSet, basename='order-history')
