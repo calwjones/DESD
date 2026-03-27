@@ -148,4 +148,31 @@
   </div>
 {% endif %}
 
+{# ── AI Demand Forecast ──────────────────────────────────────── #}
+<div class="dashboard-header" style="margin-top: 2.5rem;">
+  <h2 style="font-size: 1.1rem; font-weight: 600;">Demand Forecast (Next 7 Days)</h2>
+</div>
+
+<div class="card">
+  {% if demand_forecasts %}
+    <div class="product-grid">
+      {% for forecast in demand_forecasts %}
+        <div class="product-card">
+          <h3>{{ forecast.product.name }}</h3>
+          <span class="badge {% if forecast.level == 'high' %}badge-green{% elif forecast.level == 'low' %}badge-grey{% else %}badge-green{% endif %}">
+            {{ forecast.level|title }} Demand
+          </span>
+          <p class="meta">{{ forecast.description }}</p>
+        </div>
+      {% endfor %}
+    </div>
+    <p style="text-align: center; margin-top: 1rem; font-size: 0.8rem; color: var(--muted);">AI-powered forecast based on seasonal trends and historical data</p>
+  {% else %}
+    <div class="empty-state" style="padding: 2.5rem 1.5rem; background: #f9fafb; border: 2px dashed var(--border); border-radius: var(--radius);">
+      <p style="font-weight: 600; margin-bottom: 0.25rem;">AI Demand Forecasting Coming Soon</p>
+      <p>We'll analyze order patterns and seasonal trends to help you plan inventory more effectively.</p>
+    </div>
+  {% endif %}
+</div>
+
 {% endblock %}
