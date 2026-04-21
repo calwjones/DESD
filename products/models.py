@@ -5,6 +5,7 @@ from django.db import models
 class Product(models.Model):
     CATEGORY_CHOICES = [
         ('vegetables', 'Vegetables'),
+        ('fruit', 'Fruit'),
         ('dairy', 'Dairy'),
         ('bakery', 'Bakery'),
         ('preserves', 'Preserves'),
