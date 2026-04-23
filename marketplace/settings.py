@@ -34,6 +34,7 @@ ALLOWED_HOSTS = os.environ.get(
     "localhost"
 ).split(",")
 AI_SERVICE_URL = os.environ.get('AI_SERVICE_URL')
+DEMAND_SERVICE_URL = os.environ.get('DEMAND_SERVICE_URL')
 # Application definition
 
 INSTALLED_APPS = [

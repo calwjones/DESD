@@ -4,7 +4,10 @@ from django.shortcuts import redirect, render
 from orders.models import Order, OrderItem
 from products.models import Product
 from services.os_places_service import PostcodesService
+import requests
+from django.conf import settings
 
+DEMAND_SERVICE_URL = getattr(settings, 'DEMAND_SERVICE_URL')
 
 @login_required
 def marketplace_view(request):
@@ -47,8 +50,7 @@ def producer_dashboard_view(request):
     if request.user.role == 'customer':
         return redirect('marketplace')
     products = Product.objects.filter(producer=request.user).order_by('-created_at')
-
-    # Orders containing this producer's items, excluding terminal states
+    
     active_statuses = ['confirmed', 'processing']
     order_ids = OrderItem.objects.filter(
         product__producer=request.user,
@@ -60,15 +62,20 @@ def producer_dashboard_view(request):
         .select_related('customer')
         .order_by('delivery_date')
     )
-    # Attach only this producer's items to each order for template use
     for order in orders:
         order.producer_items = [
             item for item in order.items.all()
             if item.product.producer_id == request.user.id
         ]
 
-    # Sprint 3: AI service will provide demand forecasts
+    # Fetch demand forecasts from AI service
     demand_forecasts = []
+    try:
+        resp = requests.get(f"{DEMAND_SERVICE_URL}/forecast", timeout=5)
+        if resp.status_code == 200:
+            demand_forecasts = resp.json()
+    except requests.RequestException:
+        pass  # Fail silently, template handles empty list
 
     return render(request, 'dashboard.html', {
         'products': products,
