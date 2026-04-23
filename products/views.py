@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 
+from products.ai_grading import grade_product_image
 from .forms import ProductForm
 from .models import Product
 from services.os_places_service import PostcodesService
@@ -28,7 +29,17 @@ def product_add(request):
             product = form.save(commit=False)
             product.producer = request.user
             product.save()
-            messages.success(request, 'Product added successfully.')
+
+            # Call AI grading service (fails gracefully)
+            if product.image:
+                graded = grade_product_image(product)
+                if graded:
+                    messages.success(request, 'Product added and quality assessed.')
+                else:
+                    messages.success(request, 'Product added. Quality assessment pending.')
+            else:
+                messages.success(request, 'Product added successfully.')
+
             return redirect('producer_dashboard')
     else:
         form = ProductForm()
