@@ -52,7 +52,7 @@ COPY entrypoint.sh /entrypoint.sh
 # Temporarily switch to root to set permissions
 USER root
 RUN chmod +x /entrypoint.sh
-
+RUN mkdir -p /app/media/products && chown -R appuser:appuser /app/media
 # Switch back to non-privileged user
 USER appuser
 
