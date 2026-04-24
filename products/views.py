@@ -31,7 +31,7 @@ def product_add(request):
             product.save()
 
             # Call AI grading service (fails gracefully)
-            if product.image:
+            if product.image and product.category in ('fruit', 'vegetables'):
                 graded = grade_product_image(product)
                 if graded:
                     messages.success(request, 'Product added and quality assessed.')
@@ -46,14 +46,26 @@ def product_add(request):
     return render(request, 'products/product_form.html', {'form': form, 'action': 'Add'})
 
 
+
 @login_required
 def product_edit(request, pk):
     product = get_object_or_404(Product, pk=pk, producer=request.user)
     if request.method == 'POST':
         form = ProductForm(request.POST, request.FILES, instance=product)
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Product updated.')
+            old_image = product.image.name if product.image else None
+            product = form.save()
+
+            # Re-grade if image changed
+            if 'image' in request.FILES and product.category in ('fruit', 'vegetables'):
+                graded = grade_product_image(product)
+                if graded:
+                    messages.success(request, 'Product updated and quality re-assessed.')
+                else:
+                    messages.success(request, 'Product updated. Quality re-assessment pending.')
+            else:
+                messages.success(request, 'Product updated.')
+
             return redirect('producer_dashboard')
     else:
         form = ProductForm(instance=product)

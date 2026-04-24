@@ -15,9 +15,10 @@ from .forms import CheckoutForm
 from .models import Order, OrderItem
 from products.models import Product
 from services.os_places_service import PostcodesService
+import requests
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
-
+DEMAND_SERVICE_URL = getattr(settings, 'DEMAND_SERVICE_URL')
 
 def add_to_cart(request, product_id):
     cart = Cart(request)
@@ -271,8 +272,27 @@ def order_history(request):
     if request.user.role != 'customer':
         return redirect('producer_dashboard')
     orders = Order.objects.filter(customer=request.user).prefetch_related('items__product').order_by('-created_at')
-    # Sprint 3: AI service will provide recommendations
+
+    # Fetch AI recommendations
     recommended_products = []
+    try:
+        resp = requests.post(
+            f"{DEMAND_SERVICE_URL}/predict",
+            json={"customer_id": request.user.id, "top_n": 5},
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            recommendations = resp.json().get("recommendations", [])
+            # Try to match recommended product names to marketplace products
+            product_names = [r["product_name"] for r in recommendations if r.get("product_name")]
+            matched = Product.objects.filter(
+                name__in=product_names, 
+                is_available=True
+            )
+            recommended_products = list(matched)
+    except requests.RequestException:
+        pass
+
     return render(request, "orders/order_history.html", {
         "orders": orders,
         "recommended_products": recommended_products,
