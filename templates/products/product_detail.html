@@ -55,6 +55,24 @@
       {% else %}
         <p class="quality-pending">Quality assessment pending</p>
       {% endif %}
+      {% if product.quality_grade and request.user == product.producer %}
+        <div style="margin-top: 1rem; padding: 1rem; background: #f9fafb; border: 1px solid var(--border); border-radius: var(--radius);">
+          <form method="post" action="{% url 'products:challenge_grade' product.pk %}">
+            {% csrf_token %}
+            <p style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem;">Disagree with this grade?</p>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <select name="suggested_grade" style="padding: 0.4rem; border-radius: var(--radius); border: 1px solid var(--border);">
+                <option value="A" {% if product.quality_grade == 'A' %}disabled{% endif %}>Grade A</option>
+                <option value="B" {% if product.quality_grade == 'B' %}disabled{% endif %}>Grade B</option>
+                <option value="C" {% if product.quality_grade == 'C' %}disabled{% endif %}>Grade C</option>
+              </select>
+              <input type="text" name="reason" placeholder="Reason (optional)" 
+                     style="flex: 1; padding: 0.4rem; border-radius: var(--radius); border: 1px solid var(--border); min-width: 150px;">
+              <button type="submit" class="btn btn-secondary btn-sm">Submit Challenge</button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
     </div>
     {% if food_miles is not None %}
     <div class="detail-item">

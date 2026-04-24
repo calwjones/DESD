@@ -18,6 +18,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
+from ai_logs.views import resolve_challenge
 
 from . import views
 
@@ -38,6 +39,7 @@ urlpatterns = [
     path('', views.marketplace_view, name='marketplace'),
     path('dashboard/', views.producer_dashboard_view, name='producer_dashboard'),
     path("orders/", include("orders.urls")),
+    path('api/ai-logs/<int:pk>/resolve/', resolve_challenge, name='resolve_challenge'),
     path('api/', include(router.urls)), 
     path('api-auth/', include('rest_framework.urls')),
 ]

@@ -9,4 +9,5 @@ urlpatterns = [
     path('add/', views.product_add, name='add'),
     path('<int:pk>/edit/', views.product_edit, name='edit'),
     path('<int:pk>/delete/', views.product_delete, name='delete'),
+    path('<int:pk>/challenge/', views.challenge_grade, name='challenge_grade'),
 ]

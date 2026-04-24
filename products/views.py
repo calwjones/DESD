@@ -80,3 +80,31 @@ def product_delete(request, pk):
         messages.success(request, 'Product deleted.')
         return redirect('producer_dashboard')
     return render(request, 'products/product_confirm_delete.html', {'product': product})
+
+
+@login_required
+def challenge_grade(request, pk):
+    product = get_object_or_404(Product, pk=pk, producer=request.user)
+    if request.method == 'POST':
+        suggested_grade = request.POST.get('suggested_grade')
+        if suggested_grade in ('A', 'B', 'C'):
+            # Find the latest AI interaction for this product
+            from ai_logs.models import AIInteraction
+            interaction = AIInteraction.objects.filter(
+                input_data__product_id=product.pk,
+                service_type='quality',
+            ).order_by('-timestamp').first()
+
+            if interaction:
+                interaction.user_override = True
+                interaction.override_value = {
+                    'suggested_grade': suggested_grade,
+                    'original_grade': product.quality_grade,
+                    'reason': request.POST.get('reason', ''),
+                }
+                interaction.save()
+
+            messages.success(request, f'Grade challenge submitted. You suggested Grade {suggested_grade}.')
+        else:
+            messages.error(request, 'Invalid grade selected.')
+    return redirect('products:detail', pk=pk)
