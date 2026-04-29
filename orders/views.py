@@ -10,9 +10,11 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
+from decimal import Decimal, ROUND_HALF_UP
 from .cart import Cart
 from .forms import CheckoutForm
-from .models import Order, OrderItem, Payment
+from .models import Order, OrderItem, Payment, PaymentSplit
+from .services import calculate_commission_split, COMMISSION_RATE
 from products.models import Product
 from services.os_places_service import PostcodesService
 import requests
@@ -109,6 +111,12 @@ def checkout(request):
         producers_data[username]["items"].append(item)
         producers_data[username]["subtotal"] += item["subtotal"]
 
+    # 5% network commission shown for transparency (TC-007). Customer pays `total`;
+    # the commission is deducted from the producer's payout.
+    commission_amount = (Decimal(total) * COMMISSION_RATE).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+
     if request.method == "POST":
         form = CheckoutForm(request.POST)
         if form.is_valid():
@@ -124,6 +132,7 @@ def checkout(request):
                     "form": form,
                     "producers_data": producers_data,
                     "total": total,
+                    "commission_amount": commission_amount,
                 })
             elif not location:
                 form.add_error("postcode", "Invalid postcode — please check and try again.")
@@ -131,6 +140,7 @@ def checkout(request):
                     "form": form,
                     "producers_data": producers_data,
                     "total": total,
+                    "commission_amount": commission_amount,
                 })
 
             # Save order as pending
@@ -182,14 +192,25 @@ def checkout(request):
             order.stripe_session_id = session.id
             order.save()
 
-            # Create pending Payment record for audit trail
-            Payment.objects.create(
+            # Create pending Payment record + per-producer splits (BRFN-41)
+            split = calculate_commission_split(order)
+            payment = Payment.objects.create(
                 order=order,
                 stripe_session_id=session.id,
                 amount=total,
+                commission_amount=split["total_commission"],
+                producer_net=split["total_net"],
                 currency="GBP",
                 status="pending",
             )
+            for s in split["splits"]:
+                PaymentSplit.objects.create(
+                    payment=payment,
+                    producer=s["producer"],
+                    gross_amount=s["gross"],
+                    commission_amount=s["commission"],
+                    net_amount=s["net"],
+                )
 
             cart.clear()
 
@@ -205,6 +226,7 @@ def checkout(request):
         "form": form,
         "producers_data": producers_data,
         "total": total,
+        "commission_amount": commission_amount,
     })
 
 

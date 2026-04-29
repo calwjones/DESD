@@ -8,7 +8,8 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from products.models import Product
 from .forms import CheckoutForm
-from .models import Order, OrderItem, Payment
+from .models import Order, OrderItem, Payment, PaymentSplit
+from .services import calculate_commission_split
 from .validators import validate_delivery_date
 
 
@@ -234,3 +235,140 @@ class PaymentModelTestCase(TestCase):
         payment = order.payment
         self.assertEqual(order.status, "cancelled")
         self.assertEqual(payment.status, "failed")
+
+
+class CommissionCalculationTestCase(TestCase):
+    """
+    BRFN-41 / TC-025: 5% network commission, 95% producer net.
+    Numbers locked to the worked examples in the test case document.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.customer = User.objects.create_user(
+            username="buyer", email="b@example.com", password="pw", role="customer"
+        )
+        cls.producer1 = User.objects.create_user(
+            username="prod1", email="p1@example.com", password="pw", role="producer"
+        )
+        cls.producer2 = User.objects.create_user(
+            username="prod2", email="p2@example.com", password="pw", role="producer"
+        )
+        cls.product1 = Product.objects.create(
+            producer=cls.producer1,
+            name="Carrots",
+            description="Fresh",
+            category="vegetables",
+            price=Decimal("10.00"),
+            stock_quantity=100,
+        )
+        cls.product2 = Product.objects.create(
+            producer=cls.producer2,
+            name="Milk",
+            description="Whole",
+            category="dairy",
+            price=Decimal("10.00"),
+            stock_quantity=100,
+        )
+
+    def _make_order(self, total, items):
+        """items: list of (product, quantity, price)."""
+        order = Order.objects.create(
+            customer=self.customer,
+            total=Decimal(total),
+            status="pending",
+            delivery_date=timezone.now().date() + timedelta(days=3),
+            delivery_address="1 Test St, Bristol, BS1 1AB",
+        )
+        for product, qty, price in items:
+            OrderItem.objects.create(
+                order=order, product=product, quantity=qty, price=Decimal(price)
+            )
+        return order
+
+    def test_single_vendor_100_pound_order(self):
+        """TC-025: £100 order → £5.00 commission, £95.00 producer net."""
+        order = self._make_order(
+            "100.00", [(self.product1, 10, "10.00")]
+        )
+        result = calculate_commission_split(order)
+        self.assertEqual(result["total_gross"], Decimal("100.00"))
+        self.assertEqual(result["total_commission"], Decimal("5.00"))
+        self.assertEqual(result["total_net"], Decimal("95.00"))
+        self.assertEqual(len(result["splits"]), 1)
+        split = result["splits"][0]
+        self.assertEqual(split["producer"], self.producer1)
+        self.assertEqual(split["gross"], Decimal("100.00"))
+        self.assertEqual(split["commission"], Decimal("5.00"))
+        self.assertEqual(split["net"], Decimal("95.00"))
+
+    def test_multi_vendor_150_pound_order(self):
+        """TC-025: £150 order (P1: £80, P2: £70) → commission £7.50, P1 £76.00, P2 £66.50."""
+        order = self._make_order(
+            "150.00",
+            [
+                (self.product1, 8, "10.00"),  # P1: £80
+                (self.product2, 7, "10.00"),  # P2: £70
+            ],
+        )
+        result = calculate_commission_split(order)
+        self.assertEqual(result["total_gross"], Decimal("150.00"))
+        self.assertEqual(result["total_commission"], Decimal("7.50"))
+        self.assertEqual(result["total_net"], Decimal("142.50"))
+        self.assertEqual(len(result["splits"]), 2)
+
+        by_producer = {s["producer"].id: s for s in result["splits"]}
+        p1 = by_producer[self.producer1.id]
+        p2 = by_producer[self.producer2.id]
+        self.assertEqual(p1["gross"], Decimal("80.00"))
+        self.assertEqual(p1["commission"], Decimal("4.00"))
+        self.assertEqual(p1["net"], Decimal("76.00"))
+        self.assertEqual(p2["gross"], Decimal("70.00"))
+        self.assertEqual(p2["commission"], Decimal("3.50"))
+        self.assertEqual(p2["net"], Decimal("66.50"))
+
+    def test_rounding_to_two_decimal_places(self):
+        """TC-025 acceptance: payment calculations are accurate to 2dp."""
+        order = self._make_order(
+            "33.33", [(self.product1, 1, "33.33")]
+        )
+        result = calculate_commission_split(order)
+        self.assertEqual(result["total_commission"], Decimal("1.67"))
+        self.assertEqual(result["total_net"], Decimal("31.66"))
+
+    def test_payment_split_rows_persisted(self):
+        """Wired into the checkout flow: PaymentSplit rows match the calculation."""
+        order = self._make_order(
+            "150.00",
+            [
+                (self.product1, 8, "10.00"),
+                (self.product2, 7, "10.00"),
+            ],
+        )
+        split = calculate_commission_split(order)
+        payment = Payment.objects.create(
+            order=order,
+            stripe_session_id="sess_x",
+            amount=order.total,
+            commission_amount=split["total_commission"],
+            producer_net=split["total_net"],
+            currency="GBP",
+            status="pending",
+        )
+        for s in split["splits"]:
+            PaymentSplit.objects.create(
+                payment=payment,
+                producer=s["producer"],
+                gross_amount=s["gross"],
+                commission_amount=s["commission"],
+                net_amount=s["net"],
+            )
+
+        self.assertEqual(payment.splits.count(), 2)
+        self.assertEqual(payment.commission_amount, Decimal("7.50"))
+        self.assertEqual(payment.producer_net, Decimal("142.50"))
+        self.assertEqual(
+            payment.splits.get(producer=self.producer1).net_amount,
+            Decimal("76.00"),
+        )

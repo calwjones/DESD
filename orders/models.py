@@ -115,6 +115,18 @@ class Payment(models.Model):
         decimal_places=2
     )
 
+    commission_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    producer_net = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
     currency = models.CharField(
         max_length=3,
         default="GBP"
@@ -132,3 +144,39 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Payment for Order #{self.order_id} ({self.status})"
+
+
+class PaymentSplit(models.Model):
+
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.CASCADE,
+        related_name="splits"
+    )
+
+    producer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="payment_splits"
+    )
+
+    gross_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    commission_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    net_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    class Meta:
+        unique_together = ("payment", "producer")
+
+    def __str__(self):
+        return f"Split: {self.producer.username} £{self.net_amount} (Order #{self.payment.order_id})"
