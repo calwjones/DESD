@@ -180,3 +180,53 @@ class PaymentSplit(models.Model):
 
     def __str__(self):
         return f"Split: {self.producer.username} £{self.net_amount} (Order #{self.payment.order_id})"
+
+
+class Settlement(models.Model):
+
+    STATUS_CHOICES = [
+        ("pending", "Pending Bank Transfer"),
+        ("processed", "Processed"),
+    ]
+
+    producer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="settlements"
+    )
+
+    period_start = models.DateField()
+
+    period_end = models.DateField()
+
+    gross_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    commission_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    net_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="pending"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    class Meta:
+        unique_together = ("producer", "period_start")
+        ordering = ["-period_end"]
+
+    def __str__(self):
+        return f"Settlement {self.producer.username} {self.period_start}–{self.period_end} £{self.net_amount}"
