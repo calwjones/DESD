@@ -1,8 +1,14 @@
+from decimal import Decimal
+from datetime import timedelta
+from unittest.mock import patch
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from datetime import timedelta
+from django.contrib.auth import get_user_model
+from products.models import Product
 from .forms import CheckoutForm
+from .models import Order, OrderItem, Payment
 from .validators import validate_delivery_date
 
 
@@ -109,3 +115,122 @@ class CheckoutFormTestCase(TestCase):
             '123 Test Street, Bristol, BS1 1AB'
         )
         self.assertEqual(form.cleaned_data['delivery_date'], valid_date)
+
+
+class _FakeStripeSession(dict):
+    """Mimics Stripe's StripeObject — supports both attribute and dict access."""
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError as exc:
+            raise AttributeError(key) from exc
+
+
+class PaymentModelTestCase(TestCase):
+    """
+    BRFN-39: Payment model is populated and transitions correctly through
+    the checkout/webhook/cancel flows. Backs TC-007 acceptance criterion
+    'Payment transaction is recorded'.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.customer = User.objects.create_user(
+            username="customer1", email="c@example.com", password="pw", role="customer"
+        )
+        cls.producer = User.objects.create_user(
+            username="producer1", email="p@example.com", password="pw", role="producer"
+        )
+        cls.product = Product.objects.create(
+            producer=cls.producer,
+            name="Organic Carrots",
+            description="Fresh",
+            category="vegetables",
+            price=Decimal("10.00"),
+            stock_quantity=50,
+        )
+
+    def _make_order(self, session_id="sess_test_123"):
+        order = Order.objects.create(
+            customer=self.customer,
+            total=Decimal("100.00"),
+            status="pending",
+            delivery_date=timezone.now().date() + timedelta(days=3),
+            delivery_address="1 Test St, Bristol, BS1 1AB",
+            stripe_session_id=session_id,
+        )
+        OrderItem.objects.create(
+            order=order, product=self.product, quantity=10, price=Decimal("10.00")
+        )
+        Payment.objects.create(
+            order=order,
+            stripe_session_id=session_id,
+            amount=order.total,
+            currency="GBP",
+            status="pending",
+        )
+        return order
+
+    def test_payment_record_created_with_pending_status(self):
+        order = self._make_order()
+        payment = order.payment
+        self.assertEqual(payment.status, "pending")
+        self.assertEqual(payment.amount, Decimal("100.00"))
+        self.assertEqual(payment.currency, "GBP")
+        self.assertEqual(payment.stripe_session_id, "sess_test_123")
+        self.assertEqual(payment.stripe_payment_intent_id, "")
+
+    @patch("orders.views.stripe.checkout.Session.retrieve")
+    def test_payment_success_marks_payment_succeeded(self, mock_retrieve):
+        order = self._make_order()
+        mock_retrieve.return_value = _FakeStripeSession({
+            "id": "sess_test_123",
+            "payment_status": "paid",
+            "payment_intent": "pi_test_999",
+        })
+        self.client.force_login(self.customer)
+        with patch("orders.views._send_confirmation_emails"):
+            self.client.get(
+                reverse("payment_success") + "?session_id=sess_test_123"
+            )
+        order.refresh_from_db()
+        payment = order.payment
+        self.assertEqual(order.status, "confirmed")
+        self.assertEqual(payment.status, "succeeded")
+        self.assertEqual(payment.stripe_payment_intent_id, "pi_test_999")
+
+    @patch("orders.views.stripe.Webhook.construct_event")
+    def test_webhook_marks_payment_succeeded(self, mock_construct):
+        order = self._make_order(session_id="sess_webhook_1")
+        mock_construct.return_value = {
+            "type": "checkout.session.completed",
+            "data": {
+                "object": _FakeStripeSession({
+                    "id": "sess_webhook_1",
+                    "payment_intent": "pi_webhook_1",
+                    "metadata": {"order_id": str(order.id)},
+                })
+            },
+        }
+        self.client.post(
+            reverse("stripe_webhook"),
+            data="{}",
+            content_type="application/json",
+            HTTP_STRIPE_SIGNATURE="t=1,v1=fake",
+        )
+        order.refresh_from_db()
+        payment = order.payment
+        self.assertEqual(order.status, "confirmed")
+        self.assertEqual(payment.status, "succeeded")
+        self.assertEqual(payment.stripe_payment_intent_id, "pi_webhook_1")
+
+    def test_payment_cancel_marks_payment_failed(self):
+        order = self._make_order(session_id="sess_cancel_1")
+        self.client.force_login(self.customer)
+        self.client.get(reverse("payment_cancel") + f"?order_id={order.id}")
+        order.refresh_from_db()
+        payment = order.payment
+        self.assertEqual(order.status, "cancelled")
+        self.assertEqual(payment.status, "failed")

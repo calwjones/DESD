@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from .cart import Cart
 from .forms import CheckoutForm
-from .models import Order, OrderItem
+from .models import Order, OrderItem, Payment
 from products.models import Product
 from services.os_places_service import PostcodesService
 import requests
@@ -182,6 +182,15 @@ def checkout(request):
             order.stripe_session_id = session.id
             order.save()
 
+            # Create pending Payment record for audit trail
+            Payment.objects.create(
+                order=order,
+                stripe_session_id=session.id,
+                amount=total,
+                currency="GBP",
+                status="pending",
+            )
+
             cart.clear()
 
             return redirect(session.url)
@@ -216,6 +225,7 @@ def payment_success(request):
     if session.payment_status == "paid" and order.status != "confirmed":
         order.status = "confirmed"
         order.save()
+        _record_successful_payment(order, session)
         _send_confirmation_emails(order)
 
     return render(request, "orders/order_confirmation.html", {"order": order})
@@ -230,6 +240,7 @@ def payment_cancel(request):
             order = Order.objects.get(id=order_id, customer=request.user)
             order.status = "cancelled"
             order.save()
+            Payment.objects.filter(order=order).update(status="failed")
         except Order.DoesNotExist:
             pass
     return render(request, "orders/payment_cancelled.html")
@@ -253,8 +264,10 @@ def stripe_webhook(request):
         if order_id:
             try:
                 order = Order.objects.get(id=order_id)
-                order.status = "confirmed"
-                order.save()
+                if order.status != "confirmed":
+                    order.status = "confirmed"
+                    order.save()
+                _record_successful_payment(order, session)
             except Order.DoesNotExist:
                 pass
 
@@ -349,6 +362,23 @@ def ship_order(request, order_id):
     _send_dispatch_email(order)
     messages.success(request, f"Order #{order.id} shipped. Tracking: {tracking}")
     return redirect('producer_dashboard')
+
+
+def _record_successful_payment(order, session):
+    payment_intent_id = session.get("payment_intent") or ""
+    session_id = session.get("id") or order.stripe_session_id
+    payment, _ = Payment.objects.get_or_create(
+        order=order,
+        defaults={
+            "amount": order.total,
+            "currency": "GBP",
+            "stripe_session_id": session_id,
+        },
+    )
+    payment.stripe_session_id = session_id
+    payment.stripe_payment_intent_id = payment_intent_id
+    payment.status = "succeeded"
+    payment.save()
 
 
 def _send_confirmation_emails(order):
