@@ -76,8 +76,9 @@ class Command(BaseCommand):
 
         created = 0
         updated = 0
+        linked = 0
         for row in splits:
-            obj, was_created = Settlement.objects.update_or_create(
+            settlement, was_created = Settlement.objects.update_or_create(
                 producer_id=row["producer"],
                 period_start=period_start,
                 defaults={
@@ -92,8 +93,17 @@ class Command(BaseCommand):
             else:
                 updated += 1
 
+            # BRFN-43: link each contributing split back to its settlement.
+            linked += PaymentSplit.objects.filter(
+                producer_id=row["producer"],
+                payment__status="succeeded",
+                payment__order__status="delivered",
+                payment__created_at__date__gte=period_start,
+                payment__created_at__date__lte=period_end,
+            ).update(settlement=settlement)
+
         self.stdout.write(
             self.style.SUCCESS(
-                f"Settlements: {created} created, {updated} updated."
+                f"Settlements: {created} created, {updated} updated. {linked} splits linked."
             )
         )

@@ -160,6 +160,14 @@ class PaymentSplit(models.Model):
         related_name="payment_splits"
     )
 
+    settlement = models.ForeignKey(
+        "Settlement",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="splits"
+    )
+
     gross_amount = models.DecimalField(
         max_digits=10,
         decimal_places=2

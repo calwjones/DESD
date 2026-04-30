@@ -547,3 +547,49 @@ class SettlementCalculationTestCase(TestCase):
         self.assertEqual(
             Settlement.objects.filter(producer=self.producer1).count(), 1
         )
+
+    def test_splits_linked_to_settlement(self):
+        """BRFN-43: each contributing PaymentSplit gets a back-link to its Settlement."""
+        order_a = self._make_paid_delivered_order(
+            [(self.product1, 5, "10.00")], "50.00", self._aware(2026, 4, 21)
+        )
+        order_b = self._make_paid_delivered_order(
+            [(self.product1, 3, "10.00")], "30.00", self._aware(2026, 4, 24)
+        )
+        call_command("calculate_settlements", "--week-of", "2026-04-22", stdout=StringIO())
+
+        settlement = Settlement.objects.get(producer=self.producer1)
+        split_a = order_a.payment.splits.get(producer=self.producer1)
+        split_b = order_b.payment.splits.get(producer=self.producer1)
+        self.assertEqual(split_a.settlement, settlement)
+        self.assertEqual(split_b.settlement, settlement)
+        self.assertEqual(settlement.splits.count(), 2)
+
+    def test_multi_vendor_splits_linked_to_correct_settlements(self):
+        """BRFN-43: in a multi-vendor order, each producer's split links to their own Settlement."""
+        order = self._make_paid_delivered_order(
+            [
+                (self.product1, 8, "10.00"),
+                (self.product2, 7, "10.00"),
+            ],
+            "150.00",
+            self._aware(2026, 4, 23),
+        )
+        call_command("calculate_settlements", "--week-of", "2026-04-22", stdout=StringIO())
+
+        s1 = Settlement.objects.get(producer=self.producer1)
+        s2 = Settlement.objects.get(producer=self.producer2)
+        split1 = order.payment.splits.get(producer=self.producer1)
+        split2 = order.payment.splits.get(producer=self.producer2)
+        self.assertEqual(split1.settlement, s1)
+        self.assertEqual(split2.settlement, s2)
+
+    def test_undelivered_splits_not_linked(self):
+        """Splits from undelivered orders are not aggregated and have no settlement link."""
+        order = self._make_paid_delivered_order(
+            [(self.product1, 5, "10.00")], "50.00",
+            self._aware(2026, 4, 21), order_status="dispatched",
+        )
+        call_command("calculate_settlements", "--week-of", "2026-04-22", stdout=StringIO())
+        split = order.payment.splits.get(producer=self.producer1)
+        self.assertIsNone(split.settlement)
