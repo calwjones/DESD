@@ -88,7 +88,7 @@ def checkout(request):
         product = get_object_or_404(
             Product.objects.select_related('producer__producer_profile'), id=product_id
         )
-        subtotal = product.price * quantity
+        subtotal = product.current_price * quantity
         total += subtotal
         cart_items.append({
             "product": product,
@@ -143,6 +143,16 @@ def checkout(request):
                     "commission_amount": commission_amount,
                 })
 
+            # Validate stock before creating the order
+            out_of_stock = [
+                item for item in cart_items
+                if item["product"].stock_quantity < item["quantity"]
+            ]
+            if out_of_stock:
+                names = ", ".join(i["product"].name for i in out_of_stock)
+                messages.error(request, f"Not enough stock for: {names}. Please update your basket.")
+                return redirect("view_cart")
+
             # Save order as pending
             full_address = f"{form.cleaned_data['delivery_address']}, {location['town']}, {postcode}"
             order = Order.objects.create(
@@ -157,7 +167,7 @@ def checkout(request):
                     order=order,
                     product=item["product"],
                     quantity=item["quantity"],
-                    price=item["product"].price,
+                    price=item["product"].current_price,
                 )
 
             # Build Stripe line items
@@ -166,7 +176,7 @@ def checkout(request):
                 line_items.append({
                     "price_data": {
                         "currency": "gbp",
-                        "unit_amount": int(item["product"].price * 100),  # pence
+                        "unit_amount": int(item["product"].current_price * 100),  # pence
                         "product_data": {
                             "name": item["product"].name,
                         },
@@ -306,7 +316,53 @@ def order_confirmation(request, order_id):
 def order_history(request):
     if request.user.role != 'customer':
         return redirect('producer_dashboard')
-    orders = Order.objects.filter(customer=request.user).prefetch_related('items__product').order_by('-created_at')
+
+    orders_qs = Order.objects.filter(customer=request.user).prefetch_related(
+        'items__product__producer__producer_profile'
+    ).order_by('-created_at')
+
+    # Filters
+    start_date = request.GET.get('start_date', '').strip()
+    end_date = request.GET.get('end_date', '').strip()
+    producer_id = request.GET.get('producer', '').strip()
+
+    if start_date:
+        orders_qs = orders_qs.filter(created_at__date__gte=start_date)
+    if end_date:
+        orders_qs = orders_qs.filter(created_at__date__lte=end_date)
+    if producer_id:
+        orders_qs = orders_qs.filter(items__product__producer_id=producer_id).distinct()
+
+    orders = list(orders_qs)
+
+    # Producer dropdown — distinct producers across all of this customer's orders
+    from accounts.models import CustomUser
+    producer_ids = OrderItem.objects.filter(
+        order__customer=request.user
+    ).values_list('product__producer_id', flat=True).distinct()
+    producer_choices = (
+        CustomUser.objects.filter(id__in=producer_ids)
+        .select_related('producer_profile')
+        .order_by('username')
+    )
+
+    # Group items by producer for each order (multi-vendor breakdown)
+    for order in orders:
+        groups = {}
+        for item in order.items.all():
+            producer = item.product.producer
+            key = producer.id
+            if key not in groups:
+                profile = getattr(producer, 'producer_profile', None)
+                groups[key] = {
+                    'name': getattr(profile, 'business_name', producer.username),
+                    'username': producer.username,
+                    'items': [],
+                    'subtotal': 0,
+                }
+            groups[key]['items'].append(item)
+            groups[key]['subtotal'] += item.subtotal()
+        order.producer_groups = list(groups.values())
 
     # Fetch AI recommendations
     recommended_products = []
@@ -321,7 +377,7 @@ def order_history(request):
             # Try to match recommended product names to marketplace products
             product_names = [r["product_name"] for r in recommendations if r.get("product_name")]
             matched = Product.objects.filter(
-                name__in=product_names, 
+                name__in=product_names,
                 is_available=True
             )
             recommended_products = list(matched)
@@ -331,7 +387,49 @@ def order_history(request):
     return render(request, "orders/order_history.html", {
         "orders": orders,
         "recommended_products": recommended_products,
+        "start_date": start_date,
+        "end_date": end_date,
+        "selected_producer": producer_id,
+        "producer_choices": producer_choices,
+        "filters_active": bool(start_date or end_date or producer_id),
     })
+
+
+@login_required
+def reorder(request, order_id):
+    if request.method != 'POST' or request.user.role != 'customer':
+        return redirect('order_history')
+
+    order = get_object_or_404(Order, id=order_id, customer=request.user)
+    cart = Cart(request)
+
+    added = []        # list of (name, qty)
+    flagged = []      # list of (name, reason)
+
+    for item in order.items.select_related('product').all():
+        product = item.product
+        if not product.is_available:
+            flagged.append((product.name, "no longer available"))
+            continue
+        if product.stock_quantity == 0:
+            flagged.append((product.name, "out of stock"))
+            continue
+        qty = min(item.quantity, product.stock_quantity)
+        cart.add(product.id, qty)
+        added.append((product.name, qty))
+        if qty < item.quantity:
+            flagged.append((product.name, f"only {qty} available (you originally ordered {item.quantity})"))
+
+    if added:
+        added_names = ", ".join(f"{name} ×{qty}" for name, qty in added)
+        messages.success(request, f"Added to cart: {added_names}")
+    if flagged:
+        flagged_names = "; ".join(f"{name} — {reason}" for name, reason in flagged)
+        messages.warning(request, f"Some items couldn't be added: {flagged_names}")
+    if not added and not flagged:
+        messages.info(request, "Nothing to reorder.")
+
+    return redirect('view_cart')
 
 
 @login_required
@@ -357,7 +455,9 @@ def pack_all_items(request, order_id):
 def mark_order_ready(request, order_id):
     if request.method != "POST" or request.user.role != 'producer':
         return redirect('producer_dashboard')
-    order = get_object_or_404(Order, id=order_id, items__product__producer=request.user)
+    order = get_object_or_404(Order, id=order_id)
+    if not order.items.filter(product__producer=request.user).exists():
+        return redirect('producer_dashboard')
     # Only change status if this producer's items are all packed
     all_packed = not order.items.filter(is_packed=False, product__producer=request.user).exists()
     if not all_packed:
@@ -373,7 +473,9 @@ def mark_order_ready(request, order_id):
 def ship_order(request, order_id):
     if request.method != "POST" or request.user.role != 'producer':
         return redirect('producer_dashboard')
-    order = get_object_or_404(Order, id=order_id, items__product__producer=request.user)
+    order = get_object_or_404(Order, id=order_id)
+    if not order.items.filter(product__producer=request.user).exists():
+        return redirect('producer_dashboard')
     if order.status != "processing":
         messages.warning(request, f"Order #{order.id} is not ready for dispatch.")
         return redirect('producer_dashboard')

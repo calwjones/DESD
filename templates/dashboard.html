@@ -39,6 +39,9 @@
             {% else %}
               <span class="badge badge-grey">Unavailable</span>
             {% endif %}
+            {% if product.is_active_surplus %}
+              <span class="badge" style="background:#e67e22;color:#fff;">Surplus {{ product.surplus_discount_pct }}% off</span>
+            {% endif %}
           </td>
           <td>
             <div class="actions">

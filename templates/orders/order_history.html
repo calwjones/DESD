@@ -6,6 +6,38 @@
   <h1>My Orders</h1>
 </div>
 
+<form method="get" style="margin-bottom: 1.5rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: end;">
+  <div style="display:flex; flex-direction:column; gap:0.2rem;">
+    <label for="start_date" style="font-size:0.75rem; text-transform:uppercase; color:var(--muted); font-weight:600;">From</label>
+    <input type="date" id="start_date" name="start_date" value="{{ start_date }}" style="padding:0.4rem 0.5rem;">
+  </div>
+  <div style="display:flex; flex-direction:column; gap:0.2rem;">
+    <label for="end_date" style="font-size:0.75rem; text-transform:uppercase; color:var(--muted); font-weight:600;">To</label>
+    <input type="date" id="end_date" name="end_date" value="{{ end_date }}" style="padding:0.4rem 0.5rem;">
+  </div>
+  <div style="display:flex; flex-direction:column; gap:0.2rem;">
+    <label for="producer" style="font-size:0.75rem; text-transform:uppercase; color:var(--muted); font-weight:600;">Producer</label>
+    <select id="producer" name="producer" style="min-width: 200px; padding:0.4rem 0.5rem;">
+      <option value="">All producers</option>
+      {% for p in producer_choices %}
+      <option value="{{ p.id }}" {% if selected_producer == p.id|stringformat:"s" %}selected{% endif %}>
+        {% if p.producer_profile %}{{ p.producer_profile.business_name }}{% else %}{{ p.username }}{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-sm">Filter</button>
+  {% if filters_active %}
+  <a href="{% url 'order_history' %}" class="btn btn-secondary btn-sm">Clear</a>
+  {% endif %}
+</form>
+
+{% if filters_active %}
+<p style="font-size: 0.875rem; color: var(--muted); margin-bottom: 1rem;">
+  {{ orders|length }} order{{ orders|length|pluralize }} found
+</p>
+{% endif %}
+
 {% if orders %}
   {% for order in orders %}
   <div class="card" style="margin-bottom: 1.25rem;">
@@ -52,33 +84,62 @@
       {% endif %}
     </div>
 
-    <h2 style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">Items</h2>
-    <table class="product-table">
-      <thead>
-        <tr>
-          <th>Product</th>
-          <th>Qty</th>
-          <th>Price</th>
-          <th>Subtotal</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item in order.items.all %}
-        <tr>
-          <td>{{ item.product.name }}</td>
-          <td>{{ item.quantity }}</td>
-          <td>&pound;{{ item.price }}</td>
-          <td style="font-weight:600;color:var(--accent);">&pound;{{ item.subtotal }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    {% if order.producer_groups|length > 1 %}
+    <p style="font-size:0.75rem; color:var(--muted); margin-bottom:0.5rem;">
+      Multi-vendor order — items grouped by producer below.
+    </p>
+    {% endif %}
+
+    {% for group in order.producer_groups %}
+    <div style="margin-bottom: 1rem; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
+      <div style="display:flex; justify-content:space-between; align-items:center; background:#f9fafb; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);">
+        <strong style="font-size:0.875rem;">{{ group.name }}</strong>
+        <span style="font-size:0.8rem; color:var(--muted);">Subtotal: &pound;{{ group.subtotal|floatformat:2 }}</span>
+      </div>
+      <table class="product-table" style="margin:0;">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Price</th>
+            <th>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in group.items %}
+          <tr>
+            <td>{{ item.product.name }}
+              {% if not item.product.is_available or item.product.stock_quantity == 0 %}
+                <span class="badge badge-grey" style="font-size:0.7rem; margin-left:0.4rem;">Currently unavailable</span>
+              {% endif %}
+            </td>
+            <td>{{ item.quantity }}</td>
+            <td>&pound;{{ item.price }}</td>
+            <td style="font-weight:600;color:var(--accent);">&pound;{{ item.subtotal }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top: 0.75rem;">
+      <form method="post" action="{% url 'reorder' order.id %}" style="margin:0;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm">Reorder</button>
+      </form>
+    </div>
   </div>
   {% endfor %}
 {% else %}
   <div class="card empty-state">
-    <p>You haven't placed any orders yet.</p>
-    <a href="{% url 'marketplace' %}" class="btn">Browse the marketplace</a>
+    {% if filters_active %}
+      <p>No orders match your filters.</p>
+      <a href="{% url 'order_history' %}" class="btn btn-secondary" style="margin-top: 1rem;">Clear filters</a>
+    {% else %}
+      <p>You haven't placed any orders yet.</p>
+      <a href="{% url 'marketplace' %}" class="btn">Browse the marketplace</a>
+    {% endif %}
   </div>
 {% endif %}
 

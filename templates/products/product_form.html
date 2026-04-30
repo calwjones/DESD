@@ -6,14 +6,193 @@
 <div class="form-wrapper">
   <div class="form-card">
     <h2>{{ action }} Product</h2>
-    <form method="post" enctype="multipart/form-data">
+    <form method="post" enctype="multipart/form-data" id="product-form">
       {% csrf_token %}
-      {{ form.as_p }}
-      <div class="form-actions">
+
+      {% if form.non_field_errors %}
+        <ul class="messages">
+          {% for error in form.non_field_errors %}<li class="error">{{ error }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+
+      {# ── Standard fields ───────────────────────────────────────── #}
+      {% for field in form %}
+        {% if field.name not in "is_surplus,surplus_discount_pct,surplus_expires_at,surplus_note" %}
+        <p>
+          {{ field.label_tag }}
+          {{ field }}
+          {% if field.errors %}<span style="color:#c0392b;font-size:0.85rem;">{{ field.errors|join:", " }}</span>{% endif %}
+          {% if field.help_text %}<small style="color:var(--muted);">{{ field.help_text }}</small>{% endif %}
+        </p>
+        {% endif %}
+      {% endfor %}
+
+      {# ── Surplus Deal section ──────────────────────────────────── #}
+      <div style="margin-top:1.5rem; padding:1.25rem; border:2px solid var(--border); border-radius:var(--radius); background:#fafafa;">
+        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
+          {{ form.is_surplus }}
+          <label for="{{ form.is_surplus.id_for_label }}" style="font-weight:600; font-size:1rem; cursor:pointer;">
+            Mark as Surplus Deal
+          </label>
+        </div>
+        <p style="font-size:0.85rem; color:var(--muted); margin-bottom:1rem;">
+          Offer a time-limited discount to reduce food waste. The deal expires automatically.
+        </p>
+
+        <div id="surplus-fields" style="display:none;">
+
+          {# Preset buttons #}
+          <p style="font-weight:600; font-size:0.85rem; margin-bottom:0.5rem;">Quick Presets</p>
+          <p style="font-size:0.8rem; color:var(--muted); margin-bottom:0.75rem;">
+            Based on days until best-before date (accounting for ~3 day delivery window).
+          </p>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1.25rem;">
+            <button type="button" class="btn btn-secondary btn-sm preset-btn" data-pct="15"
+                    data-label="Early Deal" data-min-days="10">
+              15% · Early Deal <small style="opacity:0.7;">(10+ days)</small>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm preset-btn" data-pct="30"
+                    data-label="Sell Soon" data-min-days="6" data-max-days="9">
+              30% · Sell Soon <small style="opacity:0.7;">(6–9 days)</small>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm preset-btn" data-pct="50"
+                    data-label="Last Chance" data-min-days="4" data-max-days="5">
+              50% · Last Chance <small style="opacity:0.7;">(4–5 days)</small>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm preset-btn" data-pct="70"
+                    data-label="Urgent" data-min-days="2" data-max-days="3">
+              70% · Urgent <small style="opacity:0.7;">(2–3 days)</small>
+            </button>
+          </div>
+
+          {# Discount % input #}
+          <p>
+            <label for="{{ form.surplus_discount_pct.id_for_label }}" style="font-weight:600;">
+              Discount Percentage
+            </label>
+            <span id="surplus-preview" style="margin-left:0.75rem; font-size:0.85rem; color:var(--accent); font-weight:600;"></span>
+            {{ form.surplus_discount_pct }}
+            {% if form.surplus_discount_pct.errors %}
+              <span style="color:#c0392b;font-size:0.85rem;">{{ form.surplus_discount_pct.errors|join:", " }}</span>
+            {% endif %}
+          </p>
+
+          {# Expiry #}
+          <p>
+            {{ form.surplus_expires_at.label_tag }}
+            {{ form.surplus_expires_at }}
+            {% if form.surplus_expires_at.errors %}
+              <span style="color:#c0392b;font-size:0.85rem;">{{ form.surplus_expires_at.errors|join:", " }}</span>
+            {% endif %}
+          </p>
+
+          {# Note #}
+          <p>
+            {{ form.surplus_note.label_tag }}
+            {{ form.surplus_note }}
+          </p>
+
+        </div>{# /surplus-fields #}
+      </div>
+
+      <div class="form-actions" style="margin-top:1.25rem;">
         <button type="submit" class="btn">Save Product</button>
         <a href="{% url 'producer_dashboard' %}" class="btn btn-secondary">Cancel</a>
       </div>
     </form>
   </div>
 </div>
+
+{# Confirmation modal for >50% discount #}
+<div id="surplus-confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:var(--radius); padding:2rem; max-width:400px; width:90%; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+    <h3 style="margin-bottom:0.75rem;">Large Discount Warning</h3>
+    <p id="modal-message" style="margin-bottom:1.25rem; color:var(--muted);"></p>
+    <div style="display:flex; gap:0.75rem; justify-content:flex-end;">
+      <button type="button" class="btn btn-secondary" id="modal-cancel">Cancel</button>
+      <button type="button" class="btn" id="modal-confirm">Yes, apply discount</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const surplusCheck  = document.getElementById('{{ form.is_surplus.id_for_label }}');
+  const surplusFields = document.getElementById('surplus-fields');
+  const discountInput = document.getElementById('{{ form.surplus_discount_pct.id_for_label }}');
+  const preview       = document.getElementById('surplus-preview');
+  const priceField    = document.querySelector('[name="price"]');
+  const bestBeforeField = document.querySelector('[name="best_before_date"]');
+  const modal         = document.getElementById('surplus-confirm-modal');
+  const modalMsg      = document.getElementById('modal-message');
+  const form          = document.getElementById('product-form');
+
+  // Show/hide surplus fields
+  function toggleSurplus() {
+    surplusFields.style.display = surplusCheck.checked ? 'block' : 'none';
+  }
+  surplusCheck.addEventListener('change', toggleSurplus);
+  toggleSurplus();
+
+  // Live price preview
+  function updatePreview() {
+    const pct   = parseInt(discountInput.value);
+    const price = parseFloat(priceField ? priceField.value : 0);
+    if (pct > 0 && pct < 100 && price > 0) {
+      const discounted = (price * (1 - pct / 100)).toFixed(2);
+      preview.textContent = `£${price.toFixed(2)} → £${discounted}`;
+    } else {
+      preview.textContent = '';
+    }
+  }
+  discountInput.addEventListener('input', updatePreview);
+  if (priceField) priceField.addEventListener('input', updatePreview);
+
+  // Highlight recommended preset based on best-before date
+  function highlightPresets() {
+    const val = bestBeforeField ? bestBeforeField.value : '';
+    if (!val) return;
+    const today   = new Date(); today.setHours(0,0,0,0);
+    const bbDate  = new Date(val);
+    const days    = Math.round((bbDate - today) / 86400000);
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      const min = parseInt(btn.dataset.minDays || 0);
+      const max = parseInt(btn.dataset.maxDays || 9999);
+      btn.style.borderColor = (days >= min && days <= max) ? 'var(--accent)' : '';
+      btn.style.fontWeight  = (days >= min && days <= max) ? '700' : '';
+    });
+  }
+  if (bestBeforeField) {
+    bestBeforeField.addEventListener('change', highlightPresets);
+    highlightPresets();
+  }
+
+  // Preset buttons
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      discountInput.value = btn.dataset.pct;
+      updatePreview();
+    });
+  });
+
+  // >50% confirmation modal
+  let pendingSubmit = false;
+  form.addEventListener('submit', function(e) {
+    if (!surplusCheck.checked || pendingSubmit) return;
+    const pct = parseInt(discountInput.value);
+    if (pct > 50) {
+      e.preventDefault();
+      modalMsg.textContent = `You are offering ${pct}% off. This is a significant discount — are you sure?`;
+      modal.style.display = 'flex';
+    }
+  });
+
+  document.getElementById('modal-cancel').addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+  document.getElementById('modal-confirm').addEventListener('click', () => {
+    modal.style.display = 'none';
+    pendingSubmit = true;
+    form.submit();
+  });
+</script>
 {% endblock %}

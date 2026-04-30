@@ -15,9 +15,12 @@
       <h1>{{ product.name }}</h1>
       <p>{{ product.get_category_display }} &middot; {{ product.producer.username }}</p>
     </div>
-    <div style="display:flex; gap:0.5rem; align-items:center;">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
       {% if product.is_organic %}
         <span class="badge badge-green">Organic</span>
+      {% endif %}
+      {% if product.is_active_surplus %}
+        <span class="badge" style="background:#e67e22;color:#fff;">Surplus — {{ product.surplus_discount_pct }}% off</span>
       {% endif %}
       {% if not product.is_available %}
         <span class="badge badge-grey">Unavailable</span>
@@ -26,13 +29,32 @@
   </div>
 
   <p class="detail-price">
-    {% if product.discount_price %}
-      <span style="text-decoration:line-through; color:var(--text-muted); font-size:1rem;">£{{ product.price }}</span>
+    {% if product.is_active_surplus %}
+      <span style="text-decoration:line-through; color:var(--muted); font-size:1rem;">£{{ product.price }}</span>
+      <span style="color:#e67e22;">£{{ product.current_price }}</span>
+      <small style="color:var(--muted); font-size:0.8rem; display:block;">
+        {{ product.surplus_discount_pct }}% surplus discount
+        {% if product.surplus_expires_at %} · Deal expires {{ product.surplus_expires_at|date:"d M H:i" }}{% endif %}
+      </small>
+    {% elif product.discount_price %}
+      <span style="text-decoration:line-through; color:var(--muted); font-size:1rem;">£{{ product.price }}</span>
       £{{ product.discount_price }}
     {% else %}
       £{{ product.price }}
     {% endif %}
   </p>
+
+  {% if product.surplus_note and product.is_active_surplus %}
+  <p style="font-size:0.875rem; color:#e67e22; font-style:italic; margin-bottom:0.75rem;">
+    "{{ product.surplus_note }}"
+  </p>
+  {% endif %}
+
+  {% if product.best_before_warning %}
+  <div style="background:#fff3cd; border:1px solid #ffc107; border-radius:var(--radius); padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.875rem;">
+    <strong>Best-before notice:</strong> This product's best-before date is within 2 days.
+  </div>
+  {% endif %}
 
   <div class="detail-grid">
     <div class="detail-item" style="grid-column: 1 / -1;">
@@ -85,12 +107,16 @@
       <p><a href="{% url 'accounts:profile' %}" style="color: var(--accent);">Set your postcode</a> to see this</p>
     </div>
     {% endif %}
-    {% if product.allergen_info %}
-    <div class="detail-item">
-      <label>Allergen Info</label>
-      <p>{{ product.allergen_info }}</p>
+    <div class="detail-item" style="grid-column: 1 / -1;">
+      <label>Allergens</label>
+      {% if product.allergen_info %}
+      <p style="color:#b45309; background:#fffbeb; border:1px solid #fcd34d; border-radius:var(--radius); padding:0.5rem 0.75rem; font-size:0.875rem;">
+        ⚠ <strong>Contains:</strong> {{ product.allergen_display }}
+      </p>
+      {% else %}
+      <p style="color:var(--muted); font-size:0.875rem;">No allergens declared.</p>
+      {% endif %}
     </div>
-    {% endif %}
     {% if product.harvest_date %}
     <div class="detail-item">
       <label>Harvest Date</label>
@@ -120,7 +146,8 @@
 <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);">
 
   {% if product.is_available and product.stock_quantity > 0 %}
-    <form method="post" action="{% url 'add_to_cart' product.id %}" style="display: inline-flex; gap: 0.5rem; align-items: center;">
+    <form method="post" action="{% url 'add_to_cart' product.id %}" style="display: inline-flex; gap: 0.5rem; align-items: center;"
+          {% if product.best_before_warning %}data-bb-warning="true"{% endif %}>
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ request.get_full_path }}">
       <label for="qty" style="font-size: 0.875rem; font-weight: 500;">Qty:</label>
@@ -140,4 +167,14 @@
 
 </div>
 </div>
+
+<script>
+document.querySelectorAll('form[data-bb-warning]').forEach(function(form) {
+  form.addEventListener('submit', function(e) {
+    if (!confirm("This product's best-before date is within 2 days. Do you still want to add it to your cart?")) {
+      e.preventDefault();
+    }
+  });
+});
+</script>
 {% endblock %}

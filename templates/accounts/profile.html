@@ -24,6 +24,49 @@
         <a href="{% url 'marketplace' %}" class="btn btn-secondary">Cancel</a>
       </div>
     </form>
+
+    <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border);">
+
+    <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">Allergen Preferences</h3>
+    <p style="font-size: 0.8rem; color: var(--muted); margin-bottom: 0.75rem;">
+      Tick any allergens you want to avoid. On the marketplace, enable "Hide my allergens" to filter out products containing these.
+    </p>
+    {% if form.avoided_allergens %}
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.35rem 1rem; margin-bottom: 1rem;">
+      {% for checkbox in form.avoided_allergens %}
+      <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 400; text-transform: none; cursor: pointer;">
+        {{ checkbox.tag }}
+        {{ checkbox.choice_label }}
+      </label>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border);">
+
+    <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">⭐ Favourite Producers</h3>
+    {% if favourites %}
+      <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6rem;">
+        {% for fav in favourites %}
+        <li style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.75rem; background: #f9fafb; border: 1px solid var(--border); border-radius: var(--radius);">
+          <div>
+            <strong>{{ fav.producer.producer_profile.business_name }}</strong>
+            <span style="color: var(--muted); font-size: 0.8rem; margin-left: 0.4rem;">@{{ fav.producer.username }}</span>
+          </div>
+          <form method="post" action="{% url 'accounts:toggle_favourite' fav.producer.id %}" style="margin:0;">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'accounts:profile' %}">
+            <button type="submit" title="Remove from favourites"
+                    style="background:none; border:none; cursor:pointer; font-size:1rem; padding:0;">⭐</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p style="color: var(--muted); font-size: 0.875rem;">
+        No favourite producers yet. Click ☆ next to a producer on the marketplace to add them.
+      </p>
+    {% endif %}
   </div>
 </div>
 

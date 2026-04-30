@@ -8,4 +8,5 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('profile/', views.profile_view, name='profile'),
+    path('favourite/<int:producer_id>/', views.toggle_favourite, name='toggle_favourite'),
 ]
