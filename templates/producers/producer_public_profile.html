@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ profile.business_name }}{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom: 1.5rem;">
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1>{{ profile.business_name }}</h1>
+      {% if profile.postcode %}
+        <p style="color: var(--muted); font-size: 0.9rem;">📍 {{ profile.postcode }}</p>
+      {% endif %}
+    </div>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      {% if is_owner %}
+        <a href="{% url 'producers:recipe_add' %}" class="btn btn-primary">+ Add Recipe</a>
+        <a href="{% url 'producers:story_add' %}" class="btn btn-primary">+ Add Story</a>
+        <a href="{% url 'producers:edit_profile' %}" class="btn btn-secondary">Edit Profile</a>
+      {% endif %}
+      {% if request.user.role == 'customer' %}
+        <form method="post" action="{% url 'accounts:toggle_favourite' producer.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-secondary">
+            {% if is_favourite %}★ Unfavourite{% else %}☆ Favourite this producer{% endif %}
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if profile.bio %}
+    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+      <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem;">About the Farm</h3>
+      <p>{{ profile.bio }}</p>
+    </div>
+  {% endif %}
+</div>
+
+{% if products %}
+<div style="margin-bottom: 1.5rem;">
+  <h2 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem;">Products from {{ profile.business_name }}</h2>
+  <div class="product-grid">
+    {% for product in products %}
+      <div class="product-card">
+        {% if product.image %}
+          <img src="{{ product.image.url }}" alt="{{ product.name }}"
+               style="width: 100%; height: 160px; object-fit: cover; border-radius: var(--radius); margin-bottom: 0.75rem;">
+        {% endif %}
+        <div class="product-info">
+          <h3>{{ product.name }}</h3>
+          <p style="color: var(--muted); font-size: 0.85rem;">{{ product.get_category_display }}</p>
+          <p style="font-weight: 600; margin-top: 0.25rem;">£{{ product.current_price }}</p>
+          {% if product.is_organic %}
+            <span class="badge badge-green">Organic</span>
+          {% endif %}
+          {% if product.is_active_surplus %}
+            <span class="badge" style="background:#e67e22;color:#fff;">Surplus {{ product.surplus_discount_pct }}% off</span>
+          {% endif %}
+        </div>
+        <a href="{% url 'products:detail' product.pk %}" class="btn btn-secondary" style="width: 100%; margin-top: 0.75rem; text-align: center;">View Product</a>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if recipes %}
+<div style="margin-bottom: 1.5rem;">
+  <h2 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem;">Recipes</h2>
+  <div class="product-grid">
+    {% for recipe in recipes %}
+      <a href="{% url 'producers:recipe_detail' recipe.pk %}" style="text-decoration: none; color: inherit;">
+        <div class="product-card" style="cursor: pointer; transition: box-shadow 0.2s;" 
+             onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" 
+             onmouseout="this.style.boxShadow='none'">
+          {% if recipe.image %}
+            <img src="{{ recipe.image.url }}" alt="{{ recipe.title }}"
+                 style="width: 100%; height: 180px; object-fit: cover; border-radius: var(--radius); margin-bottom: 0.75rem;">
+          {% endif %}
+          <div class="product-info">
+            <h3>{{ recipe.title }}</h3>
+            <p style="color: var(--muted); font-size: 0.85rem;">{{ recipe.get_seasonal_tag_display }}</p>
+            <p style="margin-top: 0.5rem; font-size: 0.875rem;">{{ recipe.description|truncatewords:15 }}</p>
+          </div>
+          {% if is_owner %}
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+              <a href="{% url 'producers:recipe_edit' recipe.pk %}" class="btn btn-secondary" style="flex: 1;"
+                 onclick="event.stopPropagation()">Edit</a>
+              <form method="post" action="{% url 'producers:recipe_delete' recipe.pk %}" style="flex: 1;"
+                    onclick="event.stopPropagation()">
+                {% csrf_token %}
+                <button type="submit" class="btn" style="width: 100%; background: var(--danger, #dc3545); color: white;"
+                  onclick="return confirm('Delete this recipe?')">Delete</button>
+              </form>
+            </div>
+          {% endif %}
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if stories %}
+<div style="margin-bottom: 1.5rem;">
+  <h2 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem;">Farm Stories</h2>
+  <div class="product-grid">
+    {% for story in stories %}
+      <div class="product-card">
+        {% if story.image %}
+          <img src="{{ story.image.url }}" alt="{{ story.title }}"
+               style="width: 100%; height: 180px; object-fit: cover; border-radius: var(--radius); margin-bottom: 0.75rem;">
+        {% endif %}
+        <div class="product-info">
+          <h3>{{ story.title }}</h3>
+          <p style="color: var(--muted); font-size: 0.8rem;">{{ story.created_at|date:"d M Y" }}</p>
+          <p style="margin-top: 0.5rem; white-space: pre-line;">{{ story.body }}</p>
+        </div>
+        {% if is_owner %}
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <a href="{% url 'producers:story_edit' story.pk %}" class="btn btn-secondary" style="flex: 1;">Edit</a>
+            <form method="post" action="{% url 'producers:story_delete' story.pk %}" style="flex: 1;">
+              {% csrf_token %}
+              <button type="submit" class="btn" style="width: 100%; background: var(--danger, #dc3545); color: white;"
+                onclick="return confirm('Delete this story?')">Delete</button>
+            </form>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if not recipes and not stories %}
+  <div class="card empty-state">
+    <p>
+      {% if is_owner %}
+        You haven't added any recipes or stories yet.
+      {% else %}
+        This producer hasn't added any recipes or stories yet.
+      {% endif %}
+    </p>
+  </div>
+{% endif %}
+
+<a href="{% url 'marketplace' %}" class="btn btn-secondary">Back to Marketplace</a>
+
+{% endblock %}
