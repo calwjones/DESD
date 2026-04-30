@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container" style="max-width: 700px;">
+  <h1>{% if recipe %}Edit Recipe{% else %}Add Recipe{% endif %}</h1>
+
+  <form method="post" enctype="multipart/form-data" style="margin-top: 1.5rem;">
+    {% csrf_token %}
+
+    <div class="form-group">
+      <label for="title">Recipe Title</label>
+      <input type="text" id="title" name="title" class="form-control"
+        value="{{ recipe.title|default:'' }}" required>
+    </div>
+
+    <div class="form-group">
+      <label for="description">Description</label>
+      <textarea id="description" name="description" class="form-control"
+        rows="3" required>{{ recipe.description|default:'' }}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="ingredients">Ingredients</label>
+      <textarea id="ingredients" name="ingredients" class="form-control"
+        rows="5" placeholder="One ingredient per line" required>{{ recipe.ingredients|default:'' }}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="method">Method</label>
+      <textarea id="method" name="method" class="form-control"
+        rows="6" required>{{ recipe.method|default:'' }}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="seasonal_tag">Season</label>
+      <select id="seasonal_tag" name="seasonal_tag" class="form-control">
+        <option value="spring" {% if recipe.seasonal_tag == 'spring' %}selected{% endif %}>Spring</option>
+        <option value="summer" {% if recipe.seasonal_tag == 'summer' %}selected{% endif %}>Summer</option>
+        <option value="autumn" {% if recipe.seasonal_tag == 'autumn' %}selected{% endif %}>Autumn</option>
+        <option value="winter" {% if recipe.seasonal_tag == 'winter' %}selected{% endif %}>Winter</option>
+        <option value="year_round" {% if recipe.seasonal_tag == 'year_round' or not recipe %}selected{% endif %}>Year Round</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="product">Link to a product (optional)</label>
+      <select id="product" name="product" class="form-control">
+        <option value="">-- None --</option>
+        {% for p in products %}
+          <option value="{{ p.pk }}" {% if recipe.product_id == p.pk %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="image">Recipe Photo (optional)</label>
+      {% if recipe.image %}
+        <div style="margin-bottom: 0.5rem;">
+          <img src="{{ recipe.image.url }}" alt="Current photo"
+               style="max-height: 200px; border-radius: var(--radius);">
+          <p style="font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem;">Upload a new photo to replace this one.</p>
+        </div>
+      {% endif %}
+      <input type="file" id="image" name="image" class="form-control" accept="image/*">
+    </div>
+
+    <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+      <button type="submit" class="btn btn-primary">{% if recipe %}Save Changes{% else %}Add Recipe{% endif %}</button>
+      <a href="{% url 'producers:recipe_list' %}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
