@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Settlement {{ settlement.period_start }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+  <h1>Settlement {{ settlement.period_start }} – {{ settlement.period_end }}</h1>
+  <div class="actions">
+    <a href="{% url 'producers:settlement_csv' settlement.id %}" class="btn">Download CSV</a>
+    <a href="{% url 'producers:settlements_list' %}" class="btn btn-secondary btn-sm">Back</a>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom: 1rem;">
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; font-size: 0.875rem;">
+    <div>
+      <div style="color: var(--muted);">Gross</div>
+      <div style="font-family: 'DM Mono', monospace; font-weight: 600;">&pound;{{ settlement.gross_amount }}</div>
+    </div>
+    <div>
+      <div style="color: var(--muted);">Commission (5%)</div>
+      <div style="font-family: 'DM Mono', monospace; font-weight: 600;">&pound;{{ settlement.commission_amount }}</div>
+    </div>
+    <div>
+      <div style="color: var(--muted);">Net payout</div>
+      <div style="font-family: 'DM Mono', monospace; font-weight: 600; color: var(--accent);">&pound;{{ settlement.net_amount }}</div>
+    </div>
+    <div>
+      <div style="color: var(--muted);">Status</div>
+      <div>
+        {% if settlement.status == 'processed' %}
+          <span class="badge badge-green">Processed</span>
+        {% else %}
+          <span class="badge badge-grey">Pending Bank Transfer</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="padding: 0; overflow: hidden;">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th>Order #</th>
+        <th>Date</th>
+        <th>Customer</th>
+        <th>Gross</th>
+        <th>Commission</th>
+        <th>Net</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for split in splits %}
+      <tr>
+        <td>#{{ split.payment.order.id }}</td>
+        <td>{{ split.payment.created_at|date:"Y-m-d" }}</td>
+        <td>{{ split.payment.order.customer.username }}</td>
+        <td style="font-family:'DM Mono',monospace;">&pound;{{ split.gross_amount }}</td>
+        <td style="font-family:'DM Mono',monospace;">&pound;{{ split.commission_amount }}</td>
+        <td style="font-family:'DM Mono',monospace; font-weight:600;">&pound;{{ split.net_amount }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}
