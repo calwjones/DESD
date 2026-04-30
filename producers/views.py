@@ -1,16 +1,20 @@
 import csv
 from datetime import date
 from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import get_user_model
 from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .forms import ProducerProfileForm
-from .models import ProducerProfile
 from orders.models import Settlement
+from products.models import Product
 from services.os_places_service import PostcodesService
+
+from .forms import ProducerProfileForm
+from .models import ProducerProfile, Recipe, FarmStory
 
 
 @login_required
@@ -144,3 +148,139 @@ def settlement_csv(request, settlement_id):
     ])
 
     return response
+
+
+@login_required
+def recipe_list(request):
+    if request.user.role != 'producer':
+        return redirect('marketplace')
+    return redirect('producers:producer_public_profile', pk=request.user.pk)
+
+
+@login_required
+def recipe_add(request):
+    if request.user.role != 'producer':
+        return redirect('marketplace')
+    if request.method == 'POST':
+        recipe = Recipe(
+            producer=request.user,
+            title=request.POST['title'],
+            description=request.POST['description'],
+            ingredients=request.POST['ingredients'],
+            method=request.POST['method'],
+            seasonal_tag=request.POST.get('seasonal_tag', 'year_round'),
+        )
+        product_id = request.POST.get('product')
+        if product_id:
+            recipe.product_id = product_id
+        if request.FILES.get('image'):
+            recipe.image = request.FILES['image']
+        recipe.save()
+        return redirect('producers:recipe_list')
+    products = Product.objects.filter(producer=request.user)
+    return render(request, 'producers/recipe_form.html', {'products': products})
+
+
+@login_required
+def recipe_edit(request, pk):
+    recipe = get_object_or_404(Recipe, pk=pk, producer=request.user)
+    if request.method == 'POST':
+        recipe.title = request.POST['title']
+        recipe.description = request.POST['description']
+        recipe.ingredients = request.POST['ingredients']
+        recipe.method = request.POST['method']
+        recipe.seasonal_tag = request.POST.get('seasonal_tag', 'year_round')
+        product_id = request.POST.get('product')
+        recipe.product_id = product_id if product_id else None
+        if request.FILES.get('image'):
+            recipe.image = request.FILES['image']
+        recipe.save()
+        return redirect('producers:recipe_list')
+    products = Product.objects.filter(producer=request.user)
+    return render(request, 'producers/recipe_form.html', {'recipe': recipe, 'products': products})
+
+
+@login_required
+def recipe_delete(request, pk):
+    recipe = get_object_or_404(Recipe, pk=pk, producer=request.user)
+    if request.method == 'POST':
+        recipe.delete()
+    return redirect('producers:recipe_list')
+
+
+def recipe_public_list(request):
+    recipes = Recipe.objects.all().select_related('producer__producer_profile').order_by('-created_at')
+    return render(request, 'producers/recipe_public_list.html', {'recipes': recipes})
+
+def recipe_detail(request, pk):
+    recipe = get_object_or_404(Recipe, pk=pk)
+    return render(request, 'producers/recipe_detail.html', {'recipe': recipe})
+
+
+def producer_public_profile(request, pk):
+    User = get_user_model()
+    producer = get_object_or_404(User, pk=pk, role='producer')
+    profile = get_object_or_404(ProducerProfile, user=producer)
+    products = Product.objects.filter(producer=producer, is_available=True)
+    recipes = Recipe.objects.filter(producer=producer).order_by('-created_at')
+    stories = FarmStory.objects.filter(producer=producer).order_by('-created_at')
+    is_favourite = False
+    if request.user.is_authenticated and request.user.role == 'customer':
+        from accounts.models import FavouriteProducer
+        is_favourite = FavouriteProducer.objects.filter(
+            customer=request.user, producer=producer
+        ).exists()
+    is_owner = request.user.is_authenticated and request.user == producer
+    return render(request, 'producers/producer_public_profile.html', {
+        'producer': producer,
+        'profile': profile,
+        'products': products,
+        'recipes': recipes,
+        'stories': stories,
+        'is_favourite': is_favourite,
+        'is_owner': is_owner,
+    })
+
+@login_required
+def story_list(request):
+    if request.user.role != 'producer':
+        return redirect('marketplace')
+    return redirect('producers:producer_public_profile', pk=request.user.pk)
+
+
+@login_required
+def story_add(request):
+    if request.user.role != 'producer':
+        return redirect('marketplace')
+    if request.method == 'POST':
+        story = FarmStory(
+            producer=request.user,
+            title=request.POST['title'],
+            body=request.POST['body'],
+        )
+        if request.FILES.get('image'):
+            story.image = request.FILES['image']
+        story.save()
+        return redirect('producers:story_list')
+    return render(request, 'producers/story_form.html')
+
+
+@login_required
+def story_edit(request, pk):
+    story = get_object_or_404(FarmStory, pk=pk, producer=request.user)
+    if request.method == 'POST':
+        story.title = request.POST['title']
+        story.body = request.POST['body']
+        if request.FILES.get('image'):
+            story.image = request.FILES['image']
+        story.save()
+        return redirect('producers:story_list')
+    return render(request, 'producers/story_form.html', {'story': story})
+
+
+@login_required
+def story_delete(request, pk):
+    story = get_object_or_404(FarmStory, pk=pk, producer=request.user)
+    if request.method == 'POST':
+        story.delete()
+    return redirect('producers:story_list')
