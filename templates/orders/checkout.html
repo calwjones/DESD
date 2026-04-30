@@ -43,6 +43,13 @@
       <span style="font-weight: 600;">Total</span>
       <span class="detail-price" style="margin: 0;">&pound;{{ total }}</span>
     </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.4rem; font-size: 0.8rem; color: var(--muted);">
+      <span>Network commission (5%)</span>
+      <span>&pound;{{ commission_amount }}</span>
+    </div>
+    <p style="font-size: 0.75rem; color: var(--muted); margin-top: 0.4rem; margin-bottom: 0;">
+      Commission is deducted from the producer's payout — your total is unchanged.
+    </p>
   </div>
  
   <!-- Delivery Details -->

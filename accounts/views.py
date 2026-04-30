@@ -1,9 +1,11 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
+from django.utils.http import url_has_allowed_host_and_scheme
 from .forms import RegisterForm, CustomerProfileForm
+from .models import CustomUser, FavouriteProducer
 from services.os_places_service import PostcodesService
 
 def register_view(request):
@@ -77,4 +79,22 @@ def profile_view(request):
     else:
         form = CustomerProfileForm(instance=request.user)
 
-    return render(request, 'accounts/profile.html', {'form': form})
+    favourites = FavouriteProducer.objects.filter(
+        customer=request.user
+    ).select_related('producer__producer_profile').order_by('producer__producer_profile__business_name')
+
+    return render(request, 'accounts/profile.html', {'form': form, 'favourites': favourites})
+
+
+@login_required
+def toggle_favourite(request, producer_id):
+    if request.method != 'POST' or request.user.role != 'customer':
+        return redirect('marketplace')
+    producer = get_object_or_404(CustomUser, pk=producer_id, role='producer')
+    fav, created = FavouriteProducer.objects.get_or_create(customer=request.user, producer=producer)
+    if not created:
+        fav.delete()
+    next_url = request.POST.get('next', '')
+    if url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+        return redirect(next_url)
+    return redirect('marketplace')

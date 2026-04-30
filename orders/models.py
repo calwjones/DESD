@@ -82,3 +82,159 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.product} x {self.quantity}"
+
+
+class Payment(models.Model):
+
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("succeeded", "Succeeded"),
+        ("failed", "Failed"),
+    ]
+
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="payment"
+    )
+
+    stripe_session_id = models.CharField(
+        max_length=200,
+        blank=True,
+        default=""
+    )
+
+    stripe_payment_intent_id = models.CharField(
+        max_length=200,
+        blank=True,
+        default=""
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    commission_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    producer_net = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    currency = models.CharField(
+        max_length=3,
+        default="GBP"
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="pending"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    def __str__(self):
+        return f"Payment for Order #{self.order_id} ({self.status})"
+
+
+class PaymentSplit(models.Model):
+
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.CASCADE,
+        related_name="splits"
+    )
+
+    producer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="payment_splits"
+    )
+
+    settlement = models.ForeignKey(
+        "Settlement",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="splits"
+    )
+
+    gross_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    commission_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    net_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    class Meta:
+        unique_together = ("payment", "producer")
+
+    def __str__(self):
+        return f"Split: {self.producer.username} £{self.net_amount} (Order #{self.payment.order_id})"
+
+
+class Settlement(models.Model):
+
+    STATUS_CHOICES = [
+        ("pending", "Pending Bank Transfer"),
+        ("processed", "Processed"),
+    ]
+
+    producer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="settlements"
+    )
+
+    period_start = models.DateField()
+
+    period_end = models.DateField()
+
+    gross_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    commission_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    net_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="pending"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    class Meta:
+        unique_together = ("producer", "period_start")
+        ordering = ["-period_end"]
+
+    def __str__(self):
+        return f"Settlement {self.producer.username} {self.period_start}–{self.period_end} £{self.net_amount}"

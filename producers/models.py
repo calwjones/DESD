@@ -17,4 +17,4 @@ class ProducerProfile(models.Model):
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
     def __str__(self):
-        return f"Profile – {self.user.username}"
+        return f"Profile - {self.user.username}"

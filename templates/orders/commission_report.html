@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Commission Report{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+  <h1>Network Commission Report</h1>
+  <a href="?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}&format=csv" style="display:none;"></a>
+  <a href="{% url 'commission_report_csv' %}?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}" class="btn">Download CSV</a>
+</div>
+
+<div class="card" style="margin-bottom: 1rem;">
+  <form method="get" style="display: flex; gap: 0.75rem; align-items: end; flex-wrap: wrap;">
+    <div>
+      <label for="start" style="display:block; font-size:0.8rem; color: var(--muted);">From</label>
+      <input type="date" id="start" name="start" value="{{ start|date:'Y-m-d' }}">
+    </div>
+    <div>
+      <label for="end" style="display:block; font-size:0.8rem; color: var(--muted);">To</label>
+      <input type="date" id="end" name="end" value="{{ end|date:'Y-m-d' }}">
+    </div>
+    <button type="submit" class="btn btn-secondary">Apply</button>
+  </form>
+</div>
+
+<div class="card" style="margin-bottom: 1rem;">
+  <h2 style="font-size: 0.95rem; font-weight: 600; margin: 0 0 0.5rem 0;">
+    Period {{ start|date:'Y-m-d' }} – {{ end|date:'Y-m-d' }} &middot; {{ order_count }} order{{ order_count|pluralize }}
+  </h2>
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; font-size: 0.875rem;">
+    <div>
+      <div style="color: var(--muted);">Gross</div>
+      <div style="font-family:'DM Mono',monospace; font-weight:600;">&pound;{{ period_totals.gross }}</div>
+    </div>
+    <div>
+      <div style="color: var(--muted);">Commission ({{ commission_rate_pct }}%)</div>
+      <div style="font-family:'DM Mono',monospace; font-weight:600;">&pound;{{ period_totals.commission }}</div>
+    </div>
+    <div>
+      <div style="color: var(--muted);">Producer payouts</div>
+      <div style="font-family:'DM Mono',monospace; font-weight:600; color: var(--accent);">&pound;{{ period_totals.net }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom: 1rem;">
+  <h2 style="font-size: 0.95rem; font-weight: 600; margin: 0 0 0.5rem 0;">{{ ytd_totals.year }} year-to-date</h2>
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; font-size: 0.875rem;">
+    <div>
+      <div style="color: var(--muted);">Gross</div>
+      <div style="font-family:'DM Mono',monospace; font-weight:600;">&pound;{{ ytd_totals.gross }}</div>
+    </div>
+    <div>
+      <div style="color: var(--muted);">Commission</div>
+      <div style="font-family:'DM Mono',monospace; font-weight:600;">&pound;{{ ytd_totals.commission }}</div>
+    </div>
+    <div>
+      <div style="color: var(--muted);">Producer payouts</div>
+      <div style="font-family:'DM Mono',monospace; font-weight:600; color: var(--accent);">&pound;{{ ytd_totals.net }}</div>
+    </div>
+  </div>
+</div>
+
+{% if rows %}
+<div class="card" style="padding: 0; overflow: hidden;">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th>Order #</th>
+        <th>Date</th>
+        <th>Customer</th>
+        <th>Order Total</th>
+        <th>Commission</th>
+        <th>Producer breakdown</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>#{{ row.payment.order.id }}</td>
+        <td>{{ row.payment.created_at|date:"Y-m-d" }}</td>
+        <td>{{ row.payment.order.customer.username }}</td>
+        <td style="font-family:'DM Mono',monospace;">&pound;{{ row.payment.amount }}</td>
+        <td style="font-family:'DM Mono',monospace;">&pound;{{ row.payment.commission_amount }}</td>
+        <td style="font-size: 0.8rem;">
+          {% for split in row.splits %}
+          <div>
+            {{ split.producer.username }}: <span style="font-family:'DM Mono',monospace;">&pound;{{ split.net_amount }}</span>
+            <span style="color: var(--muted);">(–&pound;{{ split.commission_amount }})</span>
+          </div>
+          {% endfor %}
+        </td>
+        <td>
+          <span class="badge badge-green">{{ row.payment.get_status_display }}</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <p style="color: var(--muted); margin: 0;">No payments in this period.</p>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -10,9 +10,11 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
+from decimal import Decimal, ROUND_HALF_UP
 from .cart import Cart
 from .forms import CheckoutForm
-from .models import Order, OrderItem
+from .models import Order, OrderItem, Payment, PaymentSplit
+from .services import calculate_commission_split, COMMISSION_RATE
 from products.models import Product
 from services.os_places_service import PostcodesService
 import requests
@@ -86,7 +88,7 @@ def checkout(request):
         product = get_object_or_404(
             Product.objects.select_related('producer__producer_profile'), id=product_id
         )
-        subtotal = product.price * quantity
+        subtotal = product.current_price * quantity
         total += subtotal
         cart_items.append({
             "product": product,
@@ -109,6 +111,12 @@ def checkout(request):
         producers_data[username]["items"].append(item)
         producers_data[username]["subtotal"] += item["subtotal"]
 
+    # 5% network commission shown for transparency (TC-007). Customer pays `total`;
+    # the commission is deducted from the producer's payout.
+    commission_amount = (Decimal(total) * COMMISSION_RATE).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+
     if request.method == "POST":
         form = CheckoutForm(request.POST)
         if form.is_valid():
@@ -124,6 +132,7 @@ def checkout(request):
                     "form": form,
                     "producers_data": producers_data,
                     "total": total,
+                    "commission_amount": commission_amount,
                 })
             elif not location:
                 form.add_error("postcode", "Invalid postcode — please check and try again.")
@@ -131,7 +140,18 @@ def checkout(request):
                     "form": form,
                     "producers_data": producers_data,
                     "total": total,
+                    "commission_amount": commission_amount,
                 })
+
+            # Validate stock before creating the order
+            out_of_stock = [
+                item for item in cart_items
+                if item["product"].stock_quantity < item["quantity"]
+            ]
+            if out_of_stock:
+                names = ", ".join(i["product"].name for i in out_of_stock)
+                messages.error(request, f"Not enough stock for: {names}. Please update your basket.")
+                return redirect("view_cart")
 
             # Save order as pending
             full_address = f"{form.cleaned_data['delivery_address']}, {location['town']}, {postcode}"
@@ -147,7 +167,7 @@ def checkout(request):
                     order=order,
                     product=item["product"],
                     quantity=item["quantity"],
-                    price=item["product"].price,
+                    price=item["product"].current_price,
                 )
 
             # Build Stripe line items
@@ -156,7 +176,7 @@ def checkout(request):
                 line_items.append({
                     "price_data": {
                         "currency": "gbp",
-                        "unit_amount": int(item["product"].price * 100),  # pence
+                        "unit_amount": int(item["product"].current_price * 100),  # pence
                         "product_data": {
                             "name": item["product"].name,
                         },
@@ -182,6 +202,26 @@ def checkout(request):
             order.stripe_session_id = session.id
             order.save()
 
+            # Create pending Payment record + per-producer splits (BRFN-41)
+            split = calculate_commission_split(order)
+            payment = Payment.objects.create(
+                order=order,
+                stripe_session_id=session.id,
+                amount=total,
+                commission_amount=split["total_commission"],
+                producer_net=split["total_net"],
+                currency="GBP",
+                status="pending",
+            )
+            for s in split["splits"]:
+                PaymentSplit.objects.create(
+                    payment=payment,
+                    producer=s["producer"],
+                    gross_amount=s["gross"],
+                    commission_amount=s["commission"],
+                    net_amount=s["net"],
+                )
+
             cart.clear()
 
             return redirect(session.url)
@@ -196,6 +236,7 @@ def checkout(request):
         "form": form,
         "producers_data": producers_data,
         "total": total,
+        "commission_amount": commission_amount,
     })
 
 
@@ -216,6 +257,7 @@ def payment_success(request):
     if session.payment_status == "paid" and order.status != "confirmed":
         order.status = "confirmed"
         order.save()
+        _record_successful_payment(order, session)
         _send_confirmation_emails(order)
 
     return render(request, "orders/order_confirmation.html", {"order": order})
@@ -230,6 +272,7 @@ def payment_cancel(request):
             order = Order.objects.get(id=order_id, customer=request.user)
             order.status = "cancelled"
             order.save()
+            Payment.objects.filter(order=order).update(status="failed")
         except Order.DoesNotExist:
             pass
     return render(request, "orders/payment_cancelled.html")
@@ -253,8 +296,10 @@ def stripe_webhook(request):
         if order_id:
             try:
                 order = Order.objects.get(id=order_id)
-                order.status = "confirmed"
-                order.save()
+                if order.status != "confirmed":
+                    order.status = "confirmed"
+                    order.save()
+                _record_successful_payment(order, session)
             except Order.DoesNotExist:
                 pass
 
@@ -271,7 +316,53 @@ def order_confirmation(request, order_id):
 def order_history(request):
     if request.user.role != 'customer':
         return redirect('producer_dashboard')
-    orders = Order.objects.filter(customer=request.user).prefetch_related('items__product').order_by('-created_at')
+
+    orders_qs = Order.objects.filter(customer=request.user).prefetch_related(
+        'items__product__producer__producer_profile'
+    ).order_by('-created_at')
+
+    # Filters
+    start_date = request.GET.get('start_date', '').strip()
+    end_date = request.GET.get('end_date', '').strip()
+    producer_id = request.GET.get('producer', '').strip()
+
+    if start_date:
+        orders_qs = orders_qs.filter(created_at__date__gte=start_date)
+    if end_date:
+        orders_qs = orders_qs.filter(created_at__date__lte=end_date)
+    if producer_id:
+        orders_qs = orders_qs.filter(items__product__producer_id=producer_id).distinct()
+
+    orders = list(orders_qs)
+
+    # Producer dropdown — distinct producers across all of this customer's orders
+    from accounts.models import CustomUser
+    producer_ids = OrderItem.objects.filter(
+        order__customer=request.user
+    ).values_list('product__producer_id', flat=True).distinct()
+    producer_choices = (
+        CustomUser.objects.filter(id__in=producer_ids)
+        .select_related('producer_profile')
+        .order_by('username')
+    )
+
+    # Group items by producer for each order (multi-vendor breakdown)
+    for order in orders:
+        groups = {}
+        for item in order.items.all():
+            producer = item.product.producer
+            key = producer.id
+            if key not in groups:
+                profile = getattr(producer, 'producer_profile', None)
+                groups[key] = {
+                    'name': getattr(profile, 'business_name', producer.username),
+                    'username': producer.username,
+                    'items': [],
+                    'subtotal': 0,
+                }
+            groups[key]['items'].append(item)
+            groups[key]['subtotal'] += item.subtotal()
+        order.producer_groups = list(groups.values())
 
     # Fetch AI recommendations
     recommended_products = []
@@ -286,7 +377,7 @@ def order_history(request):
             # Try to match recommended product names to marketplace products
             product_names = [r["product_name"] for r in recommendations if r.get("product_name")]
             matched = Product.objects.filter(
-                name__in=product_names, 
+                name__in=product_names,
                 is_available=True
             )
             recommended_products = list(matched)
@@ -296,7 +387,49 @@ def order_history(request):
     return render(request, "orders/order_history.html", {
         "orders": orders,
         "recommended_products": recommended_products,
+        "start_date": start_date,
+        "end_date": end_date,
+        "selected_producer": producer_id,
+        "producer_choices": producer_choices,
+        "filters_active": bool(start_date or end_date or producer_id),
     })
+
+
+@login_required
+def reorder(request, order_id):
+    if request.method != 'POST' or request.user.role != 'customer':
+        return redirect('order_history')
+
+    order = get_object_or_404(Order, id=order_id, customer=request.user)
+    cart = Cart(request)
+
+    added = []        # list of (name, qty)
+    flagged = []      # list of (name, reason)
+
+    for item in order.items.select_related('product').all():
+        product = item.product
+        if not product.is_available:
+            flagged.append((product.name, "no longer available"))
+            continue
+        if product.stock_quantity == 0:
+            flagged.append((product.name, "out of stock"))
+            continue
+        qty = min(item.quantity, product.stock_quantity)
+        cart.add(product.id, qty)
+        added.append((product.name, qty))
+        if qty < item.quantity:
+            flagged.append((product.name, f"only {qty} available (you originally ordered {item.quantity})"))
+
+    if added:
+        added_names = ", ".join(f"{name} ×{qty}" for name, qty in added)
+        messages.success(request, f"Added to cart: {added_names}")
+    if flagged:
+        flagged_names = "; ".join(f"{name} — {reason}" for name, reason in flagged)
+        messages.warning(request, f"Some items couldn't be added: {flagged_names}")
+    if not added and not flagged:
+        messages.info(request, "Nothing to reorder.")
+
+    return redirect('view_cart')
 
 
 @login_required
@@ -322,7 +455,9 @@ def pack_all_items(request, order_id):
 def mark_order_ready(request, order_id):
     if request.method != "POST" or request.user.role != 'producer':
         return redirect('producer_dashboard')
-    order = get_object_or_404(Order, id=order_id, items__product__producer=request.user)
+    order = get_object_or_404(Order, id=order_id)
+    if not order.items.filter(product__producer=request.user).exists():
+        return redirect('producer_dashboard')
     # Only change status if this producer's items are all packed
     all_packed = not order.items.filter(is_packed=False, product__producer=request.user).exists()
     if not all_packed:
@@ -338,7 +473,9 @@ def mark_order_ready(request, order_id):
 def ship_order(request, order_id):
     if request.method != "POST" or request.user.role != 'producer':
         return redirect('producer_dashboard')
-    order = get_object_or_404(Order, id=order_id, items__product__producer=request.user)
+    order = get_object_or_404(Order, id=order_id)
+    if not order.items.filter(product__producer=request.user).exists():
+        return redirect('producer_dashboard')
     if order.status != "processing":
         messages.warning(request, f"Order #{order.id} is not ready for dispatch.")
         return redirect('producer_dashboard')
@@ -350,6 +487,23 @@ def ship_order(request, order_id):
     delivery = order.deliveries.filter(producer=request.user).first()
     messages.success(request, f"Order #{order.id} shipped. Tracking: {tracking}")
     return redirect('producer_dashboard')
+
+
+def _record_successful_payment(order, session):
+    payment_intent_id = session.get("payment_intent") or ""
+    session_id = session.get("id") or order.stripe_session_id
+    payment, _ = Payment.objects.get_or_create(
+        order=order,
+        defaults={
+            "amount": order.total,
+            "currency": "GBP",
+            "stripe_session_id": session_id,
+        },
+    )
+    payment.stripe_session_id = session_id
+    payment.stripe_payment_intent_id = payment_intent_id
+    payment.status = "succeeded"
+    payment.save()
 
 
 def _send_confirmation_emails(order):
