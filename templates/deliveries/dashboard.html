@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+  <h1>Logistics Dashboard</h1>
+  <p>Active deliveries scheduled across the network.</p>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="message {{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+  {% if deliveries %}
+    <table class="deliveries-table">
+      <thead>
+        <tr>
+          <th>Order</th>
+          <th>Producer</th>
+          <th>Pickup</th>
+          <th>Delivery Address</th>
+          <th>Scheduled</th>
+          <th>Status</th>
+          <th>Tracking</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in deliveries %}
+          <tr>
+            <td>#{{ d.order.id }}</td>
+            <td>{{ d.producer.username }}</td>
+            <td>{{ d.pickup_address|default:"—" }}</td>
+            <td>{{ d.delivery_address }}</td>
+            <td>{{ d.scheduled_date|default:"—" }} {{ d.get_scheduled_time_slot_display }}</td>
+            <td><strong>{{ d.get_status_display }}</strong></td>
+            <td>{{ d.order.tracking_number|default:"—" }}</td>
+            <td>
+              <form method="post" action="{% url 'delivery:update_status' d.id %}">
+                {% csrf_token %}
+                {% if d.status == 'scheduled' %}
+                  <button type="submit" name="status" value="collected">Mark Collected</button>
+                {% elif d.status == 'collected' %}
+                  <button type="submit" name="status" value="out_for_delivery">Out for Delivery</button>
+                {% elif d.status == 'out_for_delivery' %}
+                  <button type="submit" name="status" value="delivered">Mark Delivered</button>
+                {% endif %}
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No active deliveries.</p>
+  {% endif %}
+</div>
+{% endblock %}

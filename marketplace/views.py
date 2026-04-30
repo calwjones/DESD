@@ -51,7 +51,7 @@ def producer_dashboard_view(request):
         return redirect('marketplace')
     products = Product.objects.filter(producer=request.user).order_by('-created_at')
     
-    active_statuses = ['confirmed', 'processing']
+    active_statuses = ['confirmed', 'processing', 'dispatched', 'partially_delivered']
     order_ids = OrderItem.objects.filter(
         product__producer=request.user,
         order__status__in=active_statuses,
@@ -62,11 +62,13 @@ def producer_dashboard_view(request):
         .select_related('customer')
         .order_by('delivery_date')
     )
+
     for order in orders:
         order.producer_items = [
             item for item in order.items.all()
             if item.product.producer_id == request.user.id
         ]
+        order.my_delivery = order.deliveries.filter(producer=request.user).first()
 
     # Fetch demand forecasts from AI service
     demand_forecasts = []

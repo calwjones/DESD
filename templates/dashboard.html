@@ -152,6 +152,11 @@
           <button type="submit" class="btn">Ship Order</button>
         </form>
       {% endif %}
+      {% if order.my_delivery %}
+        <div class="delivery-info">
+          <small>Delivery: <strong>{{ order.my_delivery.get_status_display }}</strong></small>
+        </div>
+      {% endif %}
     </div>
   </div>
   {% endfor %}

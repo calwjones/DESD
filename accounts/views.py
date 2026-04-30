@@ -12,7 +12,9 @@ def register_view(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
-            if user.role == 'producer':
+            if user.role == 'logistics':
+                return redirect('delivery:logistics_dashboard')
+            elif user.role == 'producer':
                 return redirect('producer_dashboard')
             else:
                 return redirect('marketplace')
@@ -26,7 +28,9 @@ def login_view(request):
         if form.is_valid():
             user = form.get_user()
             login(request, user)
-            if user.role == 'producer':
+            if user.role == 'logistics':
+                return redirect('delivery:logistics_dashboard')
+            elif user.role == 'producer':
                 return redirect('producer_dashboard')
             else:
                 return redirect('marketplace')

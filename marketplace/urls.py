@@ -38,6 +38,7 @@ urlpatterns = [
     path('producers/', include('producers.urls')),
     path('', views.marketplace_view, name='marketplace'),
     path('dashboard/', views.producer_dashboard_view, name='producer_dashboard'),
+    path('delivery/', include('delivery.urls')),
     path("orders/", include("orders.urls")),
     path('api/ai-logs/<int:pk>/resolve/', resolve_challenge, name='resolve_challenge'),
     path('api/', include(router.urls)), 

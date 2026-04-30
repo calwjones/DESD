@@ -347,6 +347,7 @@ def ship_order(request, order_id):
     order.tracking_number = tracking
     order.save()
     _send_dispatch_email(order)
+    delivery = order.deliveries.filter(producer=request.user).first()
     messages.success(request, f"Order #{order.id} shipped. Tracking: {tracking}")
     return redirect('producer_dashboard')
 
