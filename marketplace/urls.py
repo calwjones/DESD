@@ -22,6 +22,7 @@ from ai_logs.views import resolve_challenge
 
 from . import views
 
+from orders.admin_views import commission_report, commission_report_csv
 from orders.api import OrderHistoryViewSet
 from ai_logs.api import AIInteractionViewSet
 from rest_framework.routers import DefaultRouter
@@ -39,6 +40,8 @@ urlpatterns = [
     path('', views.marketplace_view, name='marketplace'),
     path('dashboard/', views.producer_dashboard_view, name='producer_dashboard'),
     path("orders/", include("orders.urls")),
+    path('admin-reports/commission/', commission_report, name='commission_report'),
+    path('admin-reports/commission/csv/', commission_report_csv, name='commission_report_csv'),
     path('api/ai-logs/<int:pk>/resolve/', resolve_challenge, name='resolve_challenge'),
     path('api/', include(router.urls)), 
     path('api-auth/', include('rest_framework.urls')),

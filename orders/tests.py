@@ -593,3 +593,145 @@ class SettlementCalculationTestCase(TestCase):
         call_command("calculate_settlements", "--week-of", "2026-04-22", stdout=StringIO())
         split = order.payment.splits.get(producer=self.producer1)
         self.assertIsNone(split.settlement)
+
+
+class AdminCommissionReportTestCase(TestCase):
+    """
+    TC-025: admin financial reporting on the 5% network commission across orders.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.admin = User.objects.create_user(
+            username="admin1", email="a@e.com", password="pw", role="customer", is_staff=True,
+        )
+        cls.customer = User.objects.create_user(
+            username="cust", email="c@e.com", password="pw", role="customer",
+        )
+        cls.producer1 = User.objects.create_user(
+            username="prod1", email="p1@e.com", password="pw", role="producer",
+        )
+        cls.producer2 = User.objects.create_user(
+            username="prod2", email="p2@e.com", password="pw", role="producer",
+        )
+        cls.product1 = Product.objects.create(
+            producer=cls.producer1, name="A", description="x",
+            category="vegetables", price=Decimal("10.00"), stock_quantity=100,
+        )
+        cls.product2 = Product.objects.create(
+            producer=cls.producer2, name="B", description="x",
+            category="dairy", price=Decimal("10.00"), stock_quantity=100,
+        )
+
+    def _create_payment(self, total, items, when, status="succeeded"):
+        order = Order.objects.create(
+            customer=self.customer,
+            total=Decimal(total),
+            status="delivered",
+            delivery_date=when.date() + timedelta(days=2),
+            delivery_address="x",
+        )
+        for product, qty, price in items:
+            OrderItem.objects.create(
+                order=order, product=product, quantity=qty, price=Decimal(price)
+            )
+        split = calculate_commission_split(order)
+        payment = Payment.objects.create(
+            order=order,
+            stripe_session_id=f"sess_{order.id}",
+            amount=order.total,
+            commission_amount=split["total_commission"],
+            producer_net=split["total_net"],
+            currency="GBP",
+            status=status,
+        )
+        for s in split["splits"]:
+            PaymentSplit.objects.create(
+                payment=payment,
+                producer=s["producer"],
+                gross_amount=s["gross"],
+                commission_amount=s["commission"],
+                net_amount=s["net"],
+            )
+        Payment.objects.filter(pk=payment.pk).update(created_at=when)
+        return payment
+
+    def _aware(self, year, month, day):
+        return timezone.make_aware(datetime(year, month, day, 12, 0))
+
+    def test_non_staff_gets_404(self):
+        self.client.force_login(self.customer)
+        response = self.client.get(reverse("commission_report"))
+        self.assertEqual(response.status_code, 404)
+
+    def test_anonymous_redirected_to_login(self):
+        response = self.client.get(reverse("commission_report"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_period_totals_match_tc025_examples(self):
+        """£100 single + £150 multi-vendor → totals match TC-025 worked numbers."""
+        self._create_payment(
+            "100.00", [(self.product1, 10, "10.00")], self._aware(2026, 4, 21)
+        )
+        self._create_payment(
+            "150.00",
+            [
+                (self.product1, 8, "10.00"),
+                (self.product2, 7, "10.00"),
+            ],
+            self._aware(2026, 4, 23),
+        )
+        self.client.force_login(self.admin)
+        response = self.client.get(
+            reverse("commission_report") + "?start=2026-04-20&end=2026-04-26"
+        )
+        self.assertEqual(response.status_code, 200)
+        totals = response.context["period_totals"]
+        self.assertEqual(totals["gross"], Decimal("250.00"))
+        self.assertEqual(totals["commission"], Decimal("12.50"))
+        self.assertEqual(totals["net"], Decimal("237.50"))
+        self.assertEqual(response.context["order_count"], 2)
+
+    def test_date_range_filter_excludes_payments_outside(self):
+        self._create_payment(
+            "100.00", [(self.product1, 10, "10.00")], self._aware(2026, 4, 21)
+        )
+        self._create_payment(
+            "50.00", [(self.product1, 5, "10.00")], self._aware(2026, 5, 5)
+        )
+        self.client.force_login(self.admin)
+        response = self.client.get(
+            reverse("commission_report") + "?start=2026-04-20&end=2026-04-26"
+        )
+        self.assertEqual(response.context["order_count"], 1)
+        self.assertEqual(response.context["period_totals"]["gross"], Decimal("100.00"))
+
+    def test_csv_export_includes_per_producer_rows(self):
+        self._create_payment(
+            "150.00",
+            [
+                (self.product1, 8, "10.00"),
+                (self.product2, 7, "10.00"),
+            ],
+            self._aware(2026, 4, 23),
+        )
+        self.client.force_login(self.admin)
+        response = self.client.get(
+            reverse("commission_report_csv") + "?start=2026-04-20&end=2026-04-26"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv")
+        body = response.content.decode("utf-8")
+        # Both producers appear as rows
+        self.assertIn("prod1", body)
+        self.assertIn("prod2", body)
+        # Worked numbers from TC-025
+        self.assertIn("76.00", body)
+        self.assertIn("66.50", body)
+        self.assertIn("TOTAL", body)
+
+    def test_csv_blocks_non_staff(self):
+        self.client.force_login(self.customer)
+        response = self.client.get(reverse("commission_report_csv"))
+        self.assertEqual(response.status_code, 404)
