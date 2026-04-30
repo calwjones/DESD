@@ -1,0 +1,37 @@
+{
+  "model_type": "RandomForestClassifier",
+  "features": [
+    "order_count",
+    "days_since_last_order",
+    "avg_quantity",
+    "order_gap_std",
+    "total_spend",
+    "customer_total_orders",
+    "product_popularity"
+  ],
+  "target": "will_reorder",
+  "target_definition": "1 if customer-product pair reappeared in orders after the cutoff date, else 0",
+  "cutoff_date": "2026-01-13",
+  "reference_date": "2026-01-13",
+  "hyperparameters": {
+    "n_estimators": 400,
+    "max_depth": 16,
+    "min_samples_leaf": 3,
+    "class_weight": "balanced",
+    "random_state": 12
+  },
+  "test_metrics": {
+    "accuracy": 0.9922279792746114,
+    "roc_auc": 0.9980657640232109
+  },
+  "feature_order": [
+    "order_count",
+    "days_since_last_order",
+    "avg_quantity",
+    "order_gap_std",
+    "total_spend",
+    "customer_total_orders",
+    "product_popularity"
+  ],
+  "notes": "Binary classifier over (customer, product) pairs. Features engineered from orders up to cutoff_date; target derived from orders after cutoff_date. Input DataFrame must provide columns in feature_order exactly."
+}

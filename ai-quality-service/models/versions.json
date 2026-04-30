@@ -1,0 +1,38 @@
+[
+  {
+    "version": "v1_phase2",
+    "filename": "best_model_phase2.keras",
+    "filepath": "/Users/cal/Desktop/University/AAI/task2_3_4_quality_xai/models/best_model_phase2.keras",
+    "extension": ".keras",
+    "uploaded_at": "2026-04-17T16:26:22.022191+00:00",
+    "metrics": {
+      "accuracy": 0.991,
+      "f1_score": null
+    },
+    "notes": "Charles handover, MobileNetV2 fine-tune on Kaggle fresh/rotten"
+  },
+  {
+    "version": "v1-smoketest",
+    "filename": "v1-smoketest_20260422_102854.keras",
+    "filepath": "/app/models/v1-smoketest_20260422_102854.keras",
+    "extension": ".keras",
+    "uploaded_at": "2026-04-22T10:28:54.176806+00:00",
+    "metrics": {
+      "accuracy": 0.991,
+      "f1_score": null
+    },
+    "notes": "smoke test"
+  },
+  {
+    "version": "v1-smoketest2",
+    "filename": "v1-smoketest2_20260422_103244.keras",
+    "filepath": "/app/models/v1-smoketest2_20260422_103244.keras",
+    "extension": ".keras",
+    "uploaded_at": "2026-04-22T10:32:44.277184+00:00",
+    "metrics": {
+      "accuracy": 0.991,
+      "f1_score": null
+    },
+    "notes": ""
+  }
+]

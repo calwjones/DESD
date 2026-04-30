@@ -29,7 +29,7 @@ services:
     command: python manage.py runserver 0.0.0.0:8089
     volumes:
       - .:/app
-      - media_volume:/app/media
+      - ./media:/app/media
     ports:
       - "8089:8089"
     dns:
@@ -42,30 +42,37 @@ services:
       db:
         condition: service_healthy
 
-  # Sprint 3 AI Services (planned architecture - not yet implemented)
-  # These services will be deployed in Sprint 3 for the Advanced AI module
-  
-  # ai-quality-service:
-  #   build: ./ai_services/quality
-  #   container_name: brfn-quality-ai
-  #   ports:
-  #     - "8001:8001"
-  #   volumes:
-  #     - media_volume:/app/media:ro  # Read-only access to product images
-  #   networks:
-  #     - backend
-  #   depends_on:
-  #     - web
-  
-  # ai-demand-service:
-  #   build: ./ai_services/demand
-  #   container_name: brfn-demand-ai
-  #   ports:
-  #     - "8002:8002"
-  #   networks:
-  #     - backend
-  #   depends_on:
-  #     - web
+  ai-quality-service:
+    build: ./ai-quality-service
+    container_name: brfn-ai-quality
+    ports:
+      - "8001:8001"
+    environment:
+      - DESD_API_URL=http://brfn-web:8089/api
+      - DESD_SERVICE_USERNAME=${DESD_SERVICE_USERNAME:-admin}
+      - DESD_SERVICE_PASSWORD=${DESD_SERVICE_PASSWORD:-demo1234}
+    volumes:
+      - ./ai-quality-service/models:/app/models
+    networks:
+      - backend
+    restart: unless-stopped
+    depends_on:
+      - web
+
+  ai-demand-service:
+    build: ./ai-demand-service
+    container_name: brfn-ai-demand
+    ports:
+      - "8002:8002"
+    environment:
+      - DESD_API_URL=http://brfn-web:8089/api
+      - DESD_SERVICE_USERNAME=${DESD_SERVICE_USERNAME:-admin}
+      - DESD_SERVICE_PASSWORD=${DESD_SERVICE_PASSWORD:-demo1234}
+    networks:
+      - backend
+    restart: unless-stopped
+    depends_on:
+      - web
 
 networks:
   backend:
@@ -77,5 +84,3 @@ networks:
 volumes:
   postgres_data:
     name: brfn-postgres-data
-  media_volume:
-    name: brfn-media-storage
