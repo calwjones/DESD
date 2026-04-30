@@ -1,57 +1,103 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+
+{% block title %}Logistics Dashboard{% endblock %}
+
 {% block content %}
-<div class="container">
+<div class="dashboard-header">
   <h1>Logistics Dashboard</h1>
-  <p>Active deliveries scheduled across the network.</p>
-
-  {% if messages %}
-    {% for message in messages %}
-      <div class="message {{ message.tags }}">{{ message }}</div>
-    {% endfor %}
-  {% endif %}
-
-  {% if deliveries %}
-    <table class="deliveries-table">
-      <thead>
-        <tr>
-          <th>Order</th>
-          <th>Producer</th>
-          <th>Pickup</th>
-          <th>Delivery Address</th>
-          <th>Scheduled</th>
-          <th>Status</th>
-          <th>Tracking</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for d in deliveries %}
-          <tr>
-            <td>#{{ d.order.id }}</td>
-            <td>{{ d.producer.username }}</td>
-            <td>{{ d.pickup_address|default:"—" }}</td>
-            <td>{{ d.delivery_address }}</td>
-            <td>{{ d.scheduled_date|default:"—" }} {{ d.get_scheduled_time_slot_display }}</td>
-            <td><strong>{{ d.get_status_display }}</strong></td>
-            <td>{{ d.order.tracking_number|default:"—" }}</td>
-            <td>
-              <form method="post" action="{% url 'delivery:update_status' d.id %}">
-                {% csrf_token %}
-                {% if d.status == 'scheduled' %}
-                  <button type="submit" name="status" value="collected">Mark Collected</button>
-                {% elif d.status == 'collected' %}
-                  <button type="submit" name="status" value="out_for_delivery">Out for Delivery</button>
-                {% elif d.status == 'out_for_delivery' %}
-                  <button type="submit" name="status" value="delivered">Mark Delivered</button>
-                {% endif %}
-              </form>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p>No active deliveries.</p>
-  {% endif %}
+  <div class="actions">
+    <span class="badge badge-grey">{{ deliveries|length }} active</span>
+  </div>
 </div>
+
+{% if deliveries %}
+  {% for d in deliveries %}
+  <div class="card" style="margin-bottom: 1.25rem;">
+    <div class="detail-grid" style="margin-bottom: 1rem;">
+      <div class="detail-item">
+        <label>Order</label>
+        <p><strong>#{{ d.order.id }}</strong></p>
+      </div>
+      <div class="detail-item">
+        <label>Producer</label>
+        <p>{{ d.producer.username }}</p>
+      </div>
+      <div class="detail-item">
+        <label>Tracking</label>
+        <p style="font-family:'DM Mono',monospace;">{{ d.order.tracking_number|default:"—" }}</p>
+      </div>
+      <div class="detail-item">
+        <label>Status</label>
+        <p>
+          {% if d.status == 'scheduled' %}
+            <span class="badge badge-grey">{{ d.get_status_display }}</span>
+          {% elif d.status == 'collected' %}
+            <span class="badge" style="background:var(--accent);color:#fff;">{{ d.get_status_display }}</span>
+          {% elif d.status == 'out_for_delivery' %}
+            <span class="badge" style="background:#e67e22;color:#fff;">{{ d.get_status_display }}</span>
+          {% else %}
+            <span class="badge badge-green">{{ d.get_status_display }}</span>
+          {% endif %}
+        </p>
+      </div>
+    </div>
+
+    <div class="detail-grid" style="margin-bottom: 1rem;">
+      <div class="detail-item">
+        <label>Pickup</label>
+        <p>{{ d.pickup_address|default:"Not yet scheduled" }}</p>
+      </div>
+      <div class="detail-item">
+        <label>Delivery To</label>
+        <p>{{ d.delivery_address }}</p>
+      </div>
+      <div class="detail-item">
+        <label>Scheduled Date</label>
+        <p>{{ d.scheduled_date|date:"d M Y"|default:"—" }}</p>
+      </div>
+      <div class="detail-item">
+        <label>Time Slot</label>
+        <p>{{ d.get_scheduled_time_slot_display|default:"—" }}</p>
+      </div>
+    </div>
+
+    {% if d.driver_notes %}
+      <div style="margin-bottom: 1rem;">
+        <label style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Driver Notes</label>
+        <p style="margin-top: 0.25rem;">{{ d.driver_notes }}</p>
+      </div>
+    {% endif %}
+
+    <div class="actions">
+      {% if d.status == 'scheduled' %}
+        {% if d.order.status == 'dispatched' %}
+          <form method="post" action="{% url 'delivery:update_status' d.id %}">
+            {% csrf_token %}
+            <button type="submit" name="status" value="collected" class="btn">Mark Collected</button>
+          </form>
+        {% else %}
+          <span class="badge badge-grey">Awaiting producer</span>
+        {% endif %}
+      {% elif d.status == 'collected' %}
+        <form method="post" action="{% url 'delivery:update_status' d.id %}">
+          {% csrf_token %}
+          <button type="submit" name="status" value="out_for_delivery" class="btn">Out for Delivery</button>
+        </form>
+      {% elif d.status == 'out_for_delivery' %}
+        <form method="post" action="{% url 'delivery:update_status' d.id %}">
+          {% csrf_token %}
+          <button type="submit" name="status" value="delivered" class="btn">Mark Delivered</button>
+        </form>
+      {% endif %}
+      <a href="{% url 'admin:delivery_delivery_change' d.id %}" class="btn btn-secondary btn-sm">Edit Details</a>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="card empty-state">
+    <p>No active deliveries.</p>
+    <small style="color: var(--muted);">Deliveries appear here once orders are confirmed and producers ship.</small>
+  </div>
+{% endif %}
+
 {% endblock %}

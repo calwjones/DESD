@@ -144,16 +144,10 @@
     </table>
 
     <div class="actions">
-      {% if order.status == 'confirmed' %}
-        <form method="post" action="{% url 'mark_order_ready' order.id %}">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-secondary">Mark as Ready</button>
-        </form>
-      {% endif %}
-      {% if order.status == 'processing' %}
+      {% if order.status == 'confirmed' or order.status == 'processing' %}
         <form method="post" action="{% url 'ship_order' order.id %}">
           {% csrf_token %}
-          <button type="submit" class="btn">Ship Order</button>
+          <button type="submit" class="btn">Ready for Collection</button>
         </form>
       {% endif %}
       {% if order.my_delivery %}

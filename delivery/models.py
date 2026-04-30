@@ -62,13 +62,23 @@ class Delivery(models.Model):
                 f"Cannot transition from {self.status} to {new_status}"
             )
 
+        if new_status == 'collected' and self.order.status != 'dispatched':
+            raise ValueError(
+                f"Order #{self.order.id} is not yet ready for collection "
+                f"(producer status: {self.order.get_status_display()})"
+            )
+
         self.status = new_status
         self.save()
 
+        # Side effects
+        if new_status == 'collected':
+            # Customer notification: their order is now in motion
+            from orders.views import _send_dispatch_email
+            _send_dispatch_email(self.order)
+
         if new_status == 'delivered':
             self._update_parent_order_status()
-
-        # BRFN-48 will hook customer email here on Thursday
 
     def _update_parent_order_status(self):
         """Roll up delivery statuses to parent Order status."""

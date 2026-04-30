@@ -473,25 +473,30 @@ def mark_order_ready(request, order_id):
 def ship_order(request, order_id):
     if request.method != "POST" or request.user.role != 'producer':
         return redirect('producer_dashboard')
-    order = get_object_or_404(Order, id=order_id)
-    if not order.items.filter(product__producer=request.user).exists():
+    order = get_object_or_404(Order, id=order_id, items__product__producer=request.user)
+
+    # Producer must have packed all their items
+    unpacked = order.items.filter(is_packed=False, product__producer=request.user).exists()
+    if unpacked:
+        messages.warning(request, f"Order #{order.id} still has unpacked items. Pack everything before marking ready for collection.")
         return redirect('producer_dashboard')
-    if order.status != "processing":
-        messages.warning(request, f"Order #{order.id} is not ready for dispatch.")
+
+    # Allow from confirmed or processing — collapsing the old two-step flow
+    if order.status not in ('confirmed', 'processing'):
+        messages.warning(request, f"Order #{order.id} cannot be marked ready (current status: {order.get_status_display()}).")
         return redirect('producer_dashboard')
+
     tracking = "DESD-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
     order.status = "dispatched"
     order.tracking_number = tracking
     order.save()
-    _send_dispatch_email(order)
-    delivery = order.deliveries.filter(producer=request.user).first()
-    messages.success(request, f"Order #{order.id} shipped. Tracking: {tracking}")
+    messages.success(request, f"Order #{order.id} marked ready for collection. Tracking: {tracking}")
     return redirect('producer_dashboard')
 
 
 def _record_successful_payment(order, session):
-    payment_intent_id = session.get("payment_intent") or ""
-    session_id = session.get("id") or order.stripe_session_id
+    payment_intent_id = session.payment_intent or ""
+    session_id = session.id or order.stripe_session_id
     payment, _ = Payment.objects.get_or_create(
         order=order,
         defaults={
