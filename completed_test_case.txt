@@ -1,0 +1,8 @@
+
+Test cases met:
+TC-001 - Producer registration
+TC-002 - Customer registration
+TC-003 - Producer Lists a product
+TC 011 - Producer update inventory
+TC 015 - Allergen Warnings
+TC 022 - Secure Authentication
