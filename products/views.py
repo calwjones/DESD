@@ -30,8 +30,9 @@ def product_add(request):
             product.producer = request.user
             product.save()
 
-            # Call AI grading service (fails gracefully)
-            if product.image and product.category in ('fruit', 'vegetables'):
+            # Call AI grading service (fails gracefully). Producer can opt out.
+            grading_enabled = form.cleaned_data.get('enable_ai_grading', True)
+            if grading_enabled and product.image and product.category in ('fruit', 'vegetables'):
                 graded = grade_product_image(product)
                 if graded:
                     messages.success(request, 'Product added and quality assessed.')
@@ -56,8 +57,9 @@ def product_edit(request, pk):
             old_image = product.image.name if product.image else None
             product = form.save()
 
-            # Re-grade if image changed
-            if 'image' in request.FILES and product.category in ('fruit', 'vegetables'):
+            # Re-grade if image changed and producer didn't opt out
+            grading_enabled = form.cleaned_data.get('enable_ai_grading', True)
+            if grading_enabled and 'image' in request.FILES and product.category in ('fruit', 'vegetables'):
                 graded = grade_product_image(product)
                 if graded:
                     messages.success(request, 'Product updated and quality re-assessed.')
