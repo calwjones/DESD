@@ -8,16 +8,18 @@
     <form method="post">
       {% csrf_token %}
       {% for field in form %}
-      <p>
-        {{ field.label_tag }}
-        {{ field }}
-        {% if field.help_text %}
-          <span class="helptext">{{ field.help_text }}</span>
+        {% if field.name != 'avoided_allergens' %}
+        <p>
+          {{ field.label_tag }}
+          {{ field }}
+          {% if field.help_text %}
+            <span class="helptext">{{ field.help_text }}</span>
+          {% endif %}
+          {% for error in field.errors %}
+            <span class="helptext" style="color: #900;">{{ error }}</span>
+          {% endfor %}
+        </p>
         {% endif %}
-        {% for error in field.errors %}
-          <span class="helptext" style="color: #900;">{{ error }}</span>
-        {% endfor %}
-      </p>
       {% endfor %}
       <div class="form-actions">
         <button type="submit" class="btn">Save</button>

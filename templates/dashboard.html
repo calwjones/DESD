@@ -8,7 +8,9 @@
   <div class="actions">
     <a href="{% url 'producers:settlements_list' %}" class="btn btn-secondary">Settlements</a>
     <a href="{% url 'producers:edit_profile' %}" class="btn btn-secondary">Edit Profile</a>
+    <a href="{% url 'producers:producer_public_profile' request.user.pk %}" class="btn btn-secondary">My Profile</a>
     <a href="{% url 'products:add' %}" class="btn">Add Product</a>
+    
   </div>
 </div>
 

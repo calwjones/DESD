@@ -9,6 +9,12 @@ class ProductForm(forms.ModelForm):
         required=False,
         label='Allergens',
     )
+    enable_ai_grading = forms.BooleanField(
+        required=False,
+        initial=True,
+        label='Use AI quality grading',
+        help_text='Only applies to fruit/vegetables with an uploaded image. Untick to skip.',
+    )
 
     class Meta:
         model = Product

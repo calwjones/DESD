@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+ {% extends "base.html" %}
 
 {% block title %}{{ product.name }}{% endblock %}
 
@@ -13,7 +13,7 @@
   <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
     <div>
       <h1>{{ product.name }}</h1>
-      <p>{{ product.get_category_display }} &middot; {{ product.producer.username }}</p>
+      <p>{{ product.get_category_display }} &middot; <a href="{% url 'producers:producer_public_profile' product.producer.pk %}" style="color: var(--accent);">{{ product.producer.username }}</a></p>
     </div>
     <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
       {% if product.is_organic %}
@@ -143,29 +143,37 @@
     {% endif %}
   </div>
 
-<div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);">
+  <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);">
+    {% if product.is_available and product.stock_quantity > 0 %}
+      <form method="post" action="{% url 'add_to_cart' product.id %}" style="display: inline-flex; gap: 0.5rem; align-items: center;"
+            {% if product.best_before_warning %}data-bb-warning="true"{% endif %}>
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <label for="qty" style="font-size: 0.875rem; font-weight: 500;">Qty:</label>
+        <input type="number" id="qty" name="quantity" value="1" min="1" max="{{ product.stock_quantity }}"
+               style="width: 4rem; padding: 0.4rem 0.5rem;">
+        <button type="submit" class="btn btn-primary">Add to Cart</button>
+      </form>
+    {% else %}
+      <button class="btn btn-secondary" disabled>Out of Stock</button>
+    {% endif %}
+    <a href="{% url 'marketplace' %}" class="btn btn-secondary">Back to Marketplace</a>
+  </div>
 
-  {% if product.is_available and product.stock_quantity > 0 %}
-    <form method="post" action="{% url 'add_to_cart' product.id %}" style="display: inline-flex; gap: 0.5rem; align-items: center;"
-          {% if product.best_before_warning %}data-bb-warning="true"{% endif %}>
-      {% csrf_token %}
-      <input type="hidden" name="next" value="{{ request.get_full_path }}">
-      <label for="qty" style="font-size: 0.875rem; font-weight: 500;">Qty:</label>
-      <input type="number" id="qty" name="quantity" value="1" min="1" max="{{ product.stock_quantity }}"
-             style="width: 4rem; padding: 0.4rem 0.5rem;">
-      <button type="submit" class="btn btn-primary">Add to Cart</button>
-    </form>
-  {% else %}
-    <button class="btn btn-secondary" disabled>
-      Out of Stock
-    </button>
+  {% if product.recipes.exists %}
+  <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);">
+    <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem;">Recipes using this product</h3>
+    {% for recipe in product.recipes.all %}
+      <div style="padding: 0.75rem; background: var(--surface); border-radius: var(--radius); margin-bottom: 0.5rem;">
+        <strong>{{ recipe.title }}</strong>
+        <span style="color: var(--muted); font-size: 0.85rem;"> · {{ recipe.get_seasonal_tag_display }}</span>
+        <p style="font-size: 0.875rem; margin-top: 0.25rem;">{{ recipe.description|truncatewords:15 }}</p>
+        <a href="{% url 'recipe_public_list' %}" style="font-size: 0.85rem; color: var(--accent);">View all recipes →</a>
+      </div>
+    {% endfor %}
+  </div>
   {% endif %}
 
-  <a href="{% url 'marketplace' %}" class="btn btn-secondary">
-    Back to Marketplace
-  </a>
-
-</div>
 </div>
 
 <script>

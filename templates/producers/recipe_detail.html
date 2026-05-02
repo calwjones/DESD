@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ recipe.title }}{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 750px; margin: 0 auto;">
+
+  {% if recipe.image %}
+    <div style="margin: -1.75rem -2rem 1.5rem -2rem; overflow: hidden; border-radius: var(--radius) var(--radius) 0 0;">
+      <img src="{{ recipe.image.url }}" alt="{{ recipe.title }}"
+           style="width: 100%; max-height: 400px; object-fit: cover; display: block;">
+    </div>
+  {% endif %}
+
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1>{{ recipe.title }}</h1>
+      <p style="color: var(--muted); font-size: 0.9rem;">
+        {{ recipe.get_seasonal_tag_display }}
+        {% if recipe.producer.producer_profile %}
+          · {{ recipe.producer.producer_profile.business_name }}
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <p style="margin-top: 1rem;">{{ recipe.description }}</p>
+
+  {% if recipe.product %}
+    <div style="margin-top: 1rem; padding: 0.75rem 1rem; background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);">
+      <p style="font-size: 0.875rem;">
+          This recipe uses <a href="{% url 'products:detail' recipe.product.pk %}" style="color: var(--accent); font-weight: 600;">{{ recipe.product.name }}</a>
+        — available in the marketplace.
+      </p>
+    </div>
+  {% endif %}
+
+  <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border);">
+
+  <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem;">
+    <div>
+      <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem;">Ingredients</h3>
+      <p style="font-size: 0.9rem; white-space: pre-line; line-height: 1.8;">{{ recipe.ingredients }}</p>
+    </div>
+    <div>
+      <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem;">Method</h3>
+      <p style="font-size: 0.9rem; white-space: pre-line; line-height: 1.8;">{{ recipe.method }}</p>
+    </div>
+  </div>
+
+  <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border);">
+
+  <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+    <a href="javascript:history.back()" class="btn btn-secondary">← Back</a>
+    {% if recipe.producer.producer_profile %}
+      <a href="{% url 'producers:producer_public_profile' recipe.producer.pk %}" 
+         style="font-size: 0.875rem; color: var(--accent);">
+        View all recipes from {{ recipe.producer.producer_profile.business_name }} →
+      </a>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

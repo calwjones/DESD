@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if story %}Edit Story{% else %}Add Farm Story{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 700px;">
+  <h1>{% if story %}Edit Story{% else %}Share a Farm Story{% endif %}</h1>
+
+  <form method="post" enctype="multipart/form-data" style="margin-top: 1.5rem;">
+    {% csrf_token %}
+
+    <div class="form-group">
+      <label for="title">Story Title</label>
+      <input type="text" id="title" name="title" class="form-control"
+        value="{{ story.title|default:'' }}" required
+        placeholder="e.g. First strawberries of the season">
+    </div>
+
+    <div class="form-group">
+      <label for="body">Your Story</label>
+      <textarea id="body" name="body" class="form-control"
+        rows="8" required
+        placeholder="Share what's happening on your farm...">{{ story.body|default:'' }}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="image">Photo (optional)</label>
+      {% if story.image %}
+        <div style="margin-bottom: 0.5rem;">
+          <img src="{{ story.image.url }}" alt="Current photo"
+               style="max-height: 200px; border-radius: var(--radius);">
+          <p style="font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem;">Upload a new photo to replace this one.</p>
+        </div>
+      {% endif %}
+      <input type="file" id="image" name="image" class="form-control" accept="image/*">
+    </div>
+
+    <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+      <button type="submit" class="btn btn-primary">
+        {% if story %}Save Changes{% else %}Publish Story{% endif %}
+      </button>
+      <a href="{% url 'producers:story_list' %}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

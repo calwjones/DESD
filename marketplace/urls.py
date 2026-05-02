@@ -27,6 +27,7 @@ from orders.api import OrderHistoryViewSet
 from ai_logs.api import AIInteractionViewSet
 from rest_framework.routers import DefaultRouter
 from products.api import ProductViewSet
+from producers.views import recipe_public_list
 
 router = DefaultRouter()
 router.register(r'order-history', OrderHistoryViewSet, basename='order-history')
@@ -41,6 +42,7 @@ urlpatterns = [
     path('dashboard/', views.producer_dashboard_view, name='producer_dashboard'),
     path('delivery/', include('delivery.urls')),
     path("orders/", include("orders.urls")),
+    path('recipes/', recipe_public_list, name='recipe_public_list'),
     path('admin-reports/commission/', commission_report, name='commission_report'),
     path('admin-reports/commission/csv/', commission_report_csv, name='commission_report_csv'),
     path('api/ai-logs/<int:pk>/resolve/', resolve_challenge, name='resolve_challenge'),
