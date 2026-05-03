@@ -29,7 +29,7 @@ services:
     command: python manage.py runserver 0.0.0.0:8089
     volumes:
       - .:/app
-      - ./media:/app/media
+      - media_data:/app/media
     ports:
       - "8089:8089"
     dns:
@@ -84,3 +84,4 @@ networks:
 volumes:
   postgres_data:
     name: brfn-postgres-data
+  media_data:

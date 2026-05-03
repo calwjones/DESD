@@ -103,6 +103,9 @@ def producer_dashboard_view(request):
             if item.product.producer_id == request.user.id
         ]
         order.my_delivery = order.deliveries.filter(producer=request.user).first()
+        order.all_my_items_packed = bool(order.producer_items) and all(
+            item.is_packed for item in order.producer_items
+        )
 
     # Fetch demand forecasts from AI service
     demand_forecasts = []

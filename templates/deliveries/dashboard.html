@@ -24,7 +24,7 @@
       </div>
       <div class="detail-item">
         <label>Tracking</label>
-        <p style="font-family:'DM Mono',monospace;">{{ d.order.tracking_number|default:"—" }}</p>
+        <p style="font-family:'DM Mono',monospace;">{{ d.tracking_number|default:"—" }}</p>
       </div>
       <div class="detail-item">
         <label>Status</label>
@@ -44,20 +44,12 @@
 
     <div class="detail-grid" style="margin-bottom: 1rem;">
       <div class="detail-item">
-        <label>Pickup</label>
-        <p>{{ d.pickup_address|default:"Not yet scheduled" }}</p>
-      </div>
-      <div class="detail-item">
         <label>Delivery To</label>
         <p>{{ d.delivery_address }}</p>
       </div>
       <div class="detail-item">
-        <label>Scheduled Date</label>
-        <p>{{ d.scheduled_date|date:"d M Y"|default:"—" }}</p>
-      </div>
-      <div class="detail-item">
-        <label>Time Slot</label>
-        <p>{{ d.get_scheduled_time_slot_display|default:"—" }}</p>
+        <label>Delivery Date</label>
+        <p>{{ d.order.delivery_date|date:"d M Y" }}</p>
       </div>
     </div>
 
@@ -70,10 +62,10 @@
 
     <div class="actions">
       {% if d.status == 'scheduled' %}
-        {% if d.order.status == 'dispatched' %}
+        {% if d.producer_ready_at %}
           <form method="post" action="{% url 'delivery:update_status' d.id %}">
             {% csrf_token %}
-            <button type="submit" name="status" value="collected" class="btn">Mark Collected</button>
+            <button type="submit" name="status" value="collected" class="btn">Mark Picked Up</button>
           </form>
         {% else %}
           <span class="badge badge-grey">Awaiting producer</span>

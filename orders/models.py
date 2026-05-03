@@ -11,6 +11,7 @@ class Order(models.Model):
         ("payment_failed", "Payment Failed"),
         ("processing", "Processing"),
         ("dispatched", "Dispatched"),
+        ("partially_delivered", "Partially Delivered"),
         ("delivered", "Delivered"),
         ("cancelled", "Cancelled"),
     ]

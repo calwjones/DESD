@@ -16,12 +16,11 @@ def logistics_dashboard(request):
         messages.error(request, "Logistics access only.")
         return redirect('marketplace')
 
-    # Active deliveries — anything not yet delivered
     deliveries = (
         Delivery.objects
         .exclude(status='delivered')
         .select_related('order', 'producer')
-        .order_by('scheduled_date', 'scheduled_time_slot')
+        .order_by('order__delivery_date')
     )
     return render(request, 'deliveries/dashboard.html', {
         'deliveries': deliveries,
