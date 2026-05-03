@@ -486,7 +486,12 @@ def ship_order(request, order_id):
     if request.method != "POST" or request.user.role != 'producer':
         return redirect('producer_dashboard')
     
-    order = get_object_or_404(Order, id=order_id, items__product__producer=request.user)
+    order = get_object_or_404(Order, id=order_id)
+
+    # Verify this producer has items in this order
+    if not order.items.filter(product__producer=request.user).exists():
+        messages.error(request, "You don't have items in this order.")
+        return redirect('producer_dashboard')
     delivery = get_object_or_404(Delivery, order=order, producer=request.user)
     
     # Producer must have packed all their items

@@ -73,6 +73,23 @@ services:
     restart: unless-stopped
     depends_on:
       - web
+      
+  ai-dashboard:
+    build: ./dashboard
+    container_name: brfn-ai-dashboard
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8001
+      - VITE_ORDER_API_URL=http://localhost:8002
+      - VITE_DESD_URL=http://localhost:8089
+    networks:
+      - backend
+    restart: unless-stopped
+    depends_on:
+      - web
+      - ai-quality-service
+      - ai-demand-service
 
 networks:
   backend:
