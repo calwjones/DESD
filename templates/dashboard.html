@@ -146,17 +146,22 @@
     </table>
 
     <div class="actions">
-      {% if order.status == 'confirmed' %}
-        <form method="post" action="{% url 'mark_order_ready' order.id %}">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-secondary">Mark as Ready</button>
-        </form>
-      {% endif %}
-      {% if order.status == 'processing' %}
-        <form method="post" action="{% url 'ship_order' order.id %}">
-          {% csrf_token %}
-          <button type="submit" class="btn">Ship Order</button>
-        </form>
+      {% if order.my_delivery %}
+        {% if not order.my_delivery.producer_ready_at %}
+          {% if order.all_my_items_packed %}
+            <form method="post" action="{% url 'ship_order' order.id %}">
+              {% csrf_token %}
+              <button type="submit" class="btn">Ready for Collection</button>
+            </form>
+          {% else %}
+            <span class="badge badge-grey">Pack items first</span>
+          {% endif %}
+        {% else %}
+          <span class="badge badge-green">Ready for collection</span>
+        {% endif %}
+        <div class="delivery-info">
+          <small>Delivery: <strong>{{ order.my_delivery.get_status_display }}</strong></small>
+        </div>
       {% endif %}
     </div>
   </div>

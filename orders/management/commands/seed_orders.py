@@ -26,6 +26,19 @@ def _parse_date(raw):
 class Command(BaseCommand):
     help = 'Seed database with synthetic order data from purchase_history.csv'
 
+
+    def _reset_sequences(self, table_specs):
+        from django.db import connection
+        with connection.cursor() as cursor:
+            for table, pk in table_specs:
+                cursor.execute(f"""
+                    SELECT setval(
+                        pg_get_serial_sequence('{table}', '{pk}'),
+                        COALESCE((SELECT MAX({pk}) FROM {table}), 0) + 1,
+                        false
+                    );
+                """)
+
     def add_arguments(self, parser):
         parser.add_argument(
             '--csv',
@@ -199,3 +212,13 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f'Total in DB: {Order.objects.count()} orders, {OrderItem.objects.count()} items'
         ))
+
+        self._reset_sequences([
+            ('orders_order', 'id'),
+            ('orders_orderitem', 'id'),
+            ('products_product', 'id'),
+            ('accounts_customuser', 'id'),
+            ('producers_producerprofile', 'id'),
+        ])
+
+        self.stdout.write(self.style.SUCCESS('Sequences reset'))

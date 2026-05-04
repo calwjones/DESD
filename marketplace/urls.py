@@ -40,6 +40,7 @@ urlpatterns = [
     path('producers/', include('producers.urls')),
     path('', views.marketplace_view, name='marketplace'),
     path('dashboard/', views.producer_dashboard_view, name='producer_dashboard'),
+    path('delivery/', include('delivery.urls')),
     path("orders/", include("orders.urls")),
     path('recipes/', recipe_public_list, name='recipe_public_list'),
     path('admin-reports/commission/', commission_report, name='commission_report'),

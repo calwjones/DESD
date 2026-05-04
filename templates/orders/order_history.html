@@ -55,6 +55,8 @@
             <span class="badge" style="background:var(--accent);color:#fff;">{{ order.get_status_display }}</span>
           {% elif order.status == 'dispatched' %}
             <span class="badge" style="background:#7c3aed;color:#fff;">{{ order.get_status_display }}</span>
+          {% elif order.status == 'partially_delivered' %}
+            <span class="badge" style="background:#e67e22;color:#fff;">{{ order.get_status_display }}</span>
           {% elif order.status == 'delivered' %}
             <span class="badge badge-green">{{ order.get_status_display }}</span>
           {% elif order.status == 'cancelled' or order.status == 'payment_failed' %}
@@ -76,12 +78,6 @@
         <label>Total</label>
         <p class="detail-price" style="margin:0;">&pound;{{ order.total }}</p>
       </div>
-      {% if order.tracking_number %}
-      <div class="detail-item">
-        <label>Tracking</label>
-        <p style="font-family:'DM Mono',monospace;">{{ order.tracking_number }}</p>
-      </div>
-      {% endif %}
     </div>
 
     {% if order.producer_groups|length > 1 %}
@@ -92,10 +88,26 @@
 
     {% for group in order.producer_groups %}
     <div style="margin-bottom: 1rem; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
-      <div style="display:flex; justify-content:space-between; align-items:center; background:#f9fafb; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);">
-        <strong style="font-size:0.875rem;">{{ group.name }}</strong>
+    <div style="display:flex; justify-content:space-between; align-items:center; background:#f9fafb; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); gap: 0.75rem; flex-wrap: wrap;">
+      <strong style="font-size:0.875rem;">{{ group.name }}</strong>
+      <div style="display:flex; gap:0.75rem; align-items:center;">
+        {% if group.delivery_status %}
+          {% if group.delivery_status == 'delivered' %}
+            <span class="badge badge-green" style="font-size:0.7rem;">{{ group.delivery_status_display }}</span>
+          {% elif group.delivery_status == 'out_for_delivery' %}
+            <span class="badge" style="background:#e67e22;color:#fff;font-size:0.7rem;">{{ group.delivery_status_display }}</span>
+          {% elif group.delivery_status == 'collected' %}
+            <span class="badge" style="background:var(--accent);color:#fff;font-size:0.7rem;">{{ group.delivery_status_display }}</span>
+          {% else %}
+            <span class="badge badge-grey" style="font-size:0.7rem;">{{ group.delivery_status_display }}</span>
+          {% endif %}
+        {% endif %}
+        {% if group.tracking_number %}
+          <span style="font-size:0.7rem; color:var(--muted); font-family:'DM Mono',monospace;">{{ group.tracking_number }}</span>
+        {% endif %}
         <span style="font-size:0.8rem; color:var(--muted);">Subtotal: &pound;{{ group.subtotal|floatformat:2 }}</span>
       </div>
+    </div>
       <table class="product-table" style="margin:0;">
         <thead>
           <tr>

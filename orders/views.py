@@ -18,6 +18,8 @@ from .services import calculate_commission_split, COMMISSION_RATE
 from products.models import Product
 from services.os_places_service import PostcodesService
 import requests
+from django.utils import timezone
+from delivery.models import Delivery
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 DEMAND_SERVICE_URL = getattr(settings, 'DEMAND_SERVICE_URL')
@@ -318,7 +320,8 @@ def order_history(request):
         return redirect('producer_dashboard')
 
     orders_qs = Order.objects.filter(customer=request.user).prefetch_related(
-        'items__product__producer__producer_profile'
+        'items__product__producer__producer_profile',
+        'deliveries__producer',
     ).order_by('-created_at')
 
     # Filters
@@ -349,16 +352,25 @@ def order_history(request):
     # Group items by producer for each order (multi-vendor breakdown)
     for order in orders:
         groups = {}
+        # Map producer_id -> Delivery for this order, single query
+        deliveries_by_producer = {
+            d.producer_id: d for d in order.deliveries.all()
+        }
         for item in order.items.all():
             producer = item.product.producer
             key = producer.id
             if key not in groups:
                 profile = getattr(producer, 'producer_profile', None)
+                delivery = deliveries_by_producer.get(producer.id)
                 groups[key] = {
+                    'producer': producer,
                     'name': getattr(profile, 'business_name', producer.username),
                     'username': producer.username,
                     'items': [],
                     'subtotal': 0,
+                    'delivery_status': delivery.status if delivery else None,
+                    'delivery_status_display': delivery.get_status_display() if delivery else None,
+                    'tracking_number': delivery.tracking_number if delivery else '',
                 }
             groups[key]['items'].append(item)
             groups[key]['subtotal'] += item.subtotal()
@@ -473,24 +485,47 @@ def mark_order_ready(request, order_id):
 def ship_order(request, order_id):
     if request.method != "POST" or request.user.role != 'producer':
         return redirect('producer_dashboard')
+    
     order = get_object_or_404(Order, id=order_id)
+
+    # Verify this producer has items in this order
     if not order.items.filter(product__producer=request.user).exists():
+        messages.error(request, "You don't have items in this order.")
         return redirect('producer_dashboard')
-    if order.status != "processing":
-        messages.warning(request, f"Order #{order.id} is not ready for dispatch.")
+    delivery = get_object_or_404(Delivery, order=order, producer=request.user)
+    
+    # Producer must have packed all their items
+    unpacked = order.items.filter(
+        product__producer=request.user,
+        is_packed=False,
+    ).exists()
+    if unpacked:
+        messages.warning(request, "Pack all your items before marking ready for collection.")
         return redirect('producer_dashboard')
-    tracking = "DESD-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
-    order.status = "dispatched"
-    order.tracking_number = tracking
-    order.save()
-    _send_dispatch_email(order)
-    messages.success(request, f"Order #{order.id} shipped. Tracking: {tracking}")
+    
+    # Don't double-mark
+    if delivery.producer_ready_at:
+        messages.info(request, "Already marked ready for collection.")
+        return redirect('producer_dashboard')
+    
+    # Mark this producer's delivery as ready
+    delivery.producer_ready_at = timezone.now()
+    delivery.tracking_number = "DESD-" + "".join(
+        random.choices(string.ascii_uppercase + string.digits, k=10)
+    )
+    delivery.save()
+    
+    _send_dispatch_email(delivery)
+    messages.success(
+        request,
+        f"Marked ready for collection. Tracking: {delivery.tracking_number}"
+    )
     return redirect('producer_dashboard')
 
 
 def _record_successful_payment(order, session):
-    payment_intent_id = session.get("payment_intent") or ""
-    session_id = session.get("id") or order.stripe_session_id
+    payment_intent_id = session.payment_intent or ""
+    session_id = session.id or order.stripe_session_id
     payment, _ = Payment.objects.get_or_create(
         order=order,
         defaults={
@@ -560,15 +595,48 @@ def _send_confirmation_emails(order):
             fail_silently=True,
         )
 
+def _send_out_for_delivery_email(order):
+    send_mail(
+        subject=f"Order #{order.id} Out for Delivery — DESD Marketplace",
+        message=(
+            f"Hi {order.customer.username},\n\n"
+            f"Your order is out for delivery and on its way to you.\n\n"
+            f"Order #{order.id}\n"
+            f"Tracking number: {order.tracking_number}\n"
+            f"Delivery address: {order.delivery_address}\n\n"
+            f"Thanks for shopping with DESD Marketplace."
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[order.customer.email],
+        fail_silently=True,
+    )
 
-def _send_dispatch_email(order):
+
+def _send_delivered_email(order):
+    send_mail(
+        subject=f"Order #{order.id} Delivered — DESD Marketplace",
+        message=(
+            f"Hi {order.customer.username},\n\n"
+            f"Your order has been delivered. We hope you enjoy it!\n\n"
+            f"Order #{order.id}\n"
+            f"Delivery address: {order.delivery_address}\n\n"
+            f"Thanks for shopping with DESD Marketplace."
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[order.customer.email],
+        fail_silently=True,
+    )
+
+
+def _send_dispatch_email(delivery):
+    order = delivery.order
     send_mail(
         subject=f"Order #{order.id} Dispatched — DESD Marketplace",
         message=(
             f"Hi {order.customer.username},\n\n"
-            f"Great news — your order has been dispatched!\n\n"
+            f"Great news — your order from {delivery.producer.username} has been dispatched!\n\n"
             f"Order #{order.id}\n"
-            f"Tracking number: {order.tracking_number}\n"
+            f"Tracking number: {delivery.tracking_number}\n"
             f"Expected delivery: {order.delivery_date}\n"
             f"Delivery address: {order.delivery_address}\n\n"
             f"Thanks for shopping with DESD Marketplace."

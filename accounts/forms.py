@@ -7,9 +7,22 @@ from .models import CustomUser
 
 
 class RegisterForm(UserCreationForm):
+    PUBLIC_ROLES = [
+        ('customer', 'Customer'),
+        ('producer', 'Producer'),
+    ]
+    role = forms.ChoiceField(choices=PUBLIC_ROLES)
+
     class Meta:
         model = CustomUser
         fields = ['username', 'email', 'role', 'password1', 'password2']
+
+    def clean_role(self):
+        role = self.cleaned_data.get('role')
+        valid_public_roles = [choice[0] for choice in self.PUBLIC_ROLES]
+        if role not in valid_public_roles:
+            raise forms.ValidationError("Invalid role selected.")
+        return role
 
 
 class CustomerProfileForm(forms.ModelForm):
