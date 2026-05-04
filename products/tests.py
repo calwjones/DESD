@@ -5,6 +5,13 @@ from django.urls import reverse
 
 from products.models import Product
 
+from django.utils import timezone
+from datetime import timedelta
+
+from products.models import Review
+from products.forms import ReviewForm
+from orders.models import Order, OrderItem
+
 User = get_user_model()
 
 
@@ -187,3 +194,210 @@ class LowStockDashboardTestCase(TestCase):
         response = self.client.get(reverse('producer_dashboard'))
 
         self.assertNotContains(response, 'Low stock alert')
+
+class ReviewModelTestCase(TestCase):
+    """
+    Test suite for TC-024: Review model — rating constraints,
+    unique-per-customer-per-product, and field requirements.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.producer = User.objects.create_user(
+            username='reviewproducer', password='testpass123',
+            email='rp@test.local', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='reviewcustomer', password='testpass123',
+            email='rc@test.local', role='customer',
+        )
+        cls.product = Product.objects.create(
+            name='Reviewable Product',
+            description='x', category='vegetables',
+            price=5.00, stock_quantity=10,
+            producer=cls.producer, is_available=True,
+        )
+
+    def test_review_can_be_created_with_valid_data(self):
+        """Customer creates a review with rating, title, body"""
+        review = Review.objects.create(
+            product=self.product,
+            customer=self.customer,
+            rating=5,
+            title='Great',
+            body='Really enjoyed it.',
+            is_verified_purchase=True,
+        )
+        self.assertEqual(review.rating, 5)
+        self.assertTrue(review.is_verified_purchase)
+
+    def test_one_review_per_customer_per_product(self):
+        """unique_together prevents duplicate reviews for same product+customer"""
+        Review.objects.create(
+            product=self.product, customer=self.customer,
+            rating=5, title='First', body='ok',
+        )
+        with self.assertRaises(Exception):  # IntegrityError
+            Review.objects.create(
+                product=self.product, customer=self.customer,
+                rating=4, title='Second', body='also ok',
+            )
+
+    def test_review_can_be_blank_title_and_body(self):
+        """Customer can leave a rating-only review"""
+        review = Review.objects.create(
+            product=self.product, customer=self.customer,
+            rating=4, title='', body='',
+        )
+        self.assertEqual(review.rating, 4)
+        self.assertEqual(review.title, '')
+
+
+class ReviewFormTestCase(TestCase):
+    """
+    Test suite for TC-024: form validation — rating range,
+    title-and-body all-or-nothing rule.
+    """
+
+    def test_form_accepts_rating_only(self):
+        """Star-only review (no title, no body) should validate"""
+        form = ReviewForm(data={'rating': 5, 'title': '', 'body': ''})
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_form_accepts_full_review(self):
+        """Rating + title + body should validate"""
+        form = ReviewForm(data={
+            'rating': 4, 'title': 'Good', 'body': 'Properly tasty.'
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_form_rejects_title_without_body(self):
+        """Title set, body empty: should fail with non-field error"""
+        form = ReviewForm(data={'rating': 4, 'title': 'Hmm', 'body': ''})
+        self.assertFalse(form.is_valid())
+        self.assertIn('both', str(form.non_field_errors()).lower())
+
+    def test_form_rejects_body_without_title(self):
+        """Body set, title empty: should fail with non-field error"""
+        form = ReviewForm(data={'rating': 4, 'title': '', 'body': 'Decent'})
+        self.assertFalse(form.is_valid())
+        self.assertIn('both', str(form.non_field_errors()).lower())
+
+    def test_form_rejects_invalid_rating(self):
+        """Rating outside 1-5 should fail"""
+        form = ReviewForm(data={'rating': 6, 'title': '', 'body': ''})
+        self.assertFalse(form.is_valid())
+
+    def test_form_strips_whitespace_only_input_to_empty(self):
+        """Title or body of just spaces should be treated as empty"""
+        form = ReviewForm(data={
+            'rating': 5, 'title': '   ', 'body': '   '
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+        # Both end up stripped to empty, which is allowed
+        self.assertEqual(form.cleaned_data['title'], '')
+        self.assertEqual(form.cleaned_data['body'], '')
+
+
+class ReviewViewTestCase(TestCase):
+    """
+    Test suite for TC-024: write_review view permissions and behaviour.
+    Only customers with delivered orders can review; one review per product.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.producer = User.objects.create_user(
+            username='vp', password='testpass123',
+            email='vp@test.local', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='vc', password='testpass123',
+            email='vc@test.local', role='customer',
+        )
+        cls.other_customer = User.objects.create_user(
+            username='vc2', password='testpass123',
+            email='vc2@test.local', role='customer',
+        )
+        cls.product = Product.objects.create(
+            name='View Test Product',
+            description='x', category='vegetables',
+            price=5.00, stock_quantity=10,
+            producer=cls.producer, is_available=True,
+        )
+
+    def _make_order(self, customer, status='delivered'):
+        order = Order.objects.create(
+            customer=customer,
+            total=5.00,
+            status=status,
+            delivery_date=timezone.now().date() + timedelta(days=3),
+            delivery_address='Bristol',
+        )
+        OrderItem.objects.create(
+            order=order, product=self.product,
+            quantity=1, price=5.00,
+        )
+        return order
+
+    def test_customer_with_delivered_order_can_review(self):
+        """Customer who has received the product can post a review"""
+        self._make_order(self.customer, status='delivered')
+        self.client.login(username='vc', password='testpass123')
+
+        response = self.client.post(
+            reverse('products:write_review', args=[self.product.id]),
+            data={'rating': 5, 'title': 'Great', 'body': 'Loved it'},
+        )
+        self.assertEqual(Review.objects.filter(product=self.product, customer=self.customer).count(), 1)
+
+    def test_customer_without_delivered_order_blocked(self):
+        """Customer with no delivered order for this product cannot review"""
+        self.client.login(username='vc', password='testpass123')
+
+        self.client.post(
+            reverse('products:write_review', args=[self.product.id]),
+            data={'rating': 5, 'title': 'Great', 'body': 'Loved it'},
+        )
+        self.assertEqual(Review.objects.filter(product=self.product, customer=self.customer).count(), 0)
+
+    def test_customer_with_only_pending_order_blocked(self):
+        """Order status other than delivered should not allow review"""
+        self._make_order(self.customer, status='pending')
+        self.client.login(username='vc', password='testpass123')
+
+        self.client.post(
+            reverse('products:write_review', args=[self.product.id]),
+            data={'rating': 5, 'title': 'Great', 'body': 'Loved it'},
+        )
+        self.assertEqual(Review.objects.filter(product=self.product, customer=self.customer).count(), 0)
+
+    def test_producer_cannot_post_review(self):
+        """Only customers can write reviews"""
+        self.client.login(username='vp', password='testpass123')
+
+        self.client.post(
+            reverse('products:write_review', args=[self.product.id]),
+            data={'rating': 5, 'title': 'My own product', 'body': 'rigged'},
+        )
+        self.assertEqual(Review.objects.filter(product=self.product).count(), 0)
+
+    def test_customer_cannot_review_twice(self):
+        """Second review attempt by same customer should be rejected"""
+        self._make_order(self.customer, status='delivered')
+        Review.objects.create(
+            product=self.product, customer=self.customer,
+            rating=5, title='First', body='ok',
+        )
+        self.client.login(username='vc', password='testpass123')
+
+        self.client.post(
+            reverse('products:write_review', args=[self.product.id]),
+            data={'rating': 1, 'title': 'Second', 'body': 'changed mind'},
+        )
+        # Still only one review
+        self.assertEqual(Review.objects.filter(product=self.product, customer=self.customer).count(), 1)
+        # Original review unchanged
+        review = Review.objects.get(product=self.product, customer=self.customer)
+        self.assertEqual(review.rating, 5)
+        self.assertEqual(review.title, 'First')
