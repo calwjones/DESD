@@ -19,7 +19,8 @@ class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
         fields = [
-            'name', 'description', 'category', 'price', 'stock_quantity',
+            'name', 'description', 'category', 'price', 'stock_quantity', 'stock_threshold',
+            'low_stock_email_alerts',
             'is_available', 'is_organic', 'allergen_info', 'harvest_date',
             'best_before_date', 'available_from', 'available_until', 'discount_price',
             'image',

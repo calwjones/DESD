@@ -38,6 +38,19 @@ class Product(models.Model):
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
     price = models.DecimalField(max_digits=8, decimal_places=2)
     stock_quantity = models.PositiveIntegerField(default=0)
+    stock_threshold = models.PositiveIntegerField(
+        default=0,
+        help_text="Show low-stock warning when stock drops to this level or below. Set to 0 to disable.",
+    )
+    low_stock_email_alerts = models.BooleanField(
+        default=False,
+        help_text="Email me when this product's stock drops to or below the threshold.",
+    )
+    low_stock_alerted = models.BooleanField(
+        default=False,
+        editable=False,  # internal state, never shown in admin/forms
+        help_text="Internal: tracks whether we've already sent the alert for the current low-stock state.",
+    )
     is_available = models.BooleanField(default=True)
     is_organic = models.BooleanField(default=False)
     allergen_info = models.TextField(blank=True)
@@ -67,6 +80,42 @@ class Product(models.Model):
     quality_assessed_at = models.DateTimeField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        
+        if not self.low_stock_email_alerts or self.stock_threshold == 0:
+            return
+        
+        just_dropped = self.is_low_stock and not self.low_stock_alerted
+        just_recovered = not self.is_low_stock and self.low_stock_alerted
+        
+        if just_dropped:
+            self._send_low_stock_email()
+            Product.objects.filter(pk=self.pk).update(low_stock_alerted=True)
+        elif just_recovered:
+            Product.objects.filter(pk=self.pk).update(low_stock_alerted=False)
+
+
+    def _send_low_stock_email(self):
+        from django.core.mail import send_mail
+        from django.conf import settings
+        
+        send_mail(
+            subject=f"Low Stock Alert: {self.name} — DESD Marketplace",
+            message=(
+                f"Hi {self.producer.username},\n\n"
+                f"Stock for one of your products has dropped to or below your alert threshold.\n\n"
+                f"Product: {self.name}\n"
+                f"Current stock: {self.stock_quantity}\n"
+                f"Threshold: {self.stock_threshold}\n\n"
+                f"Log in to your dashboard to update inventory.\n\n"
+                f"DESD Marketplace"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[self.producer.email],
+            fail_silently=True,
+    )
 
     @property
     def is_active_surplus(self):
@@ -106,6 +155,10 @@ class Product(models.Model):
     def allergen_display(self):
         lookup = dict(ALLERGEN_CHOICES)
         return ', '.join(lookup.get(a, a.title()) for a in self.allergen_list)
+   
+    @property
+    def is_low_stock(self):
+        return self.stock_threshold > 0 and self.stock_quantity <= self.stock_threshold
 
     def __str__(self):
         return f"{self.name} ({self.producer.username})"

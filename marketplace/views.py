@@ -84,7 +84,7 @@ def producer_dashboard_view(request):
     if request.user.role == 'customer':
         return redirect('marketplace')
     products = Product.objects.filter(producer=request.user).order_by('-created_at')
-    
+    low_stock_products = [p for p in products if p.is_low_stock]
     active_statuses = ['confirmed', 'processing', 'dispatched', 'partially_delivered']
     order_ids = OrderItem.objects.filter(
         product__producer=request.user,
@@ -120,4 +120,5 @@ def producer_dashboard_view(request):
         'products': products,
         'orders': orders,
         'demand_forecasts': demand_forecasts,
+        'low_stock_products': low_stock_products,  # new
     })
