@@ -3,7 +3,7 @@ from datetime import datetime, date, timedelta
 from io import StringIO
 from unittest.mock import patch
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -15,6 +15,12 @@ from .models import Order, OrderItem, Payment, PaymentSplit, Settlement
 from .services import calculate_commission_split
 from .validators import validate_delivery_date
 
+
+
+from orders.cart import Cart 
+from products.models import Product
+
+User = get_user_model()
 
 class DeliveryValidationTestCase(TestCase):
     """
@@ -735,3 +741,246 @@ class AdminCommissionReportTestCase(TestCase):
         self.client.force_login(self.customer)
         response = self.client.get(reverse("commission_report_csv"))
         self.assertEqual(response.status_code, 404)
+
+
+
+
+class CartTestCase(TestCase):
+    """
+    Test suite for TC-006: shopping cart functionality.
+    Covers add, remove, update quantity, clear, and session persistence.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.producer = User.objects.create_user(
+            username='cartproducer', password='testpass123',
+            email='cp@test.local', role='producer',
+        )
+        cls.product_a = Product.objects.create(
+            name='Cart Product A',
+            description='x', category='vegetables',
+            price=Decimal('5.00'), stock_quantity=10,
+            producer=cls.producer, is_available=True,
+        )
+        cls.product_b = Product.objects.create(
+            name='Cart Product B',
+            description='y', category='fruit',
+            price=Decimal('3.00'), stock_quantity=20,
+            producer=cls.producer, is_available=True,
+        )
+
+    def setUp(self):
+        # Each test gets a fresh request with empty session
+        self.factory = RequestFactory()
+        self.request = self.factory.get('/')
+        # RequestFactory doesn't include session middleware — attach manually
+        from django.contrib.sessions.backends.db import SessionStore
+        self.request.session = SessionStore()
+
+    def test_new_cart_is_empty(self):
+        """Cart starts empty for a new session"""
+        cart = Cart(self.request)
+        self.assertEqual(cart.cart, {})
+
+    def test_add_single_product(self):
+        """Adding a product stores it with the given quantity"""
+        cart = Cart(self.request)
+        cart.add(self.product_a.id, quantity=3)
+        self.assertEqual(cart.cart[str(self.product_a.id)], 3)
+
+    def test_add_same_product_twice_accumulates_quantity(self):
+        """Re-adding the same product increases the quantity"""
+        cart = Cart(self.request)
+        cart.add(self.product_a.id, quantity=2)
+        cart.add(self.product_a.id, quantity=3)
+        self.assertEqual(cart.cart[str(self.product_a.id)], 5)
+
+    def test_add_multiple_products(self):
+        """Different products are tracked separately"""
+        cart = Cart(self.request)
+        cart.add(self.product_a.id, quantity=2)
+        cart.add(self.product_b.id, quantity=4)
+        self.assertEqual(cart.cart[str(self.product_a.id)], 2)
+        self.assertEqual(cart.cart[str(self.product_b.id)], 4)
+
+    def test_update_quantity_replaces_existing(self):
+        """Update should set the quantity, not accumulate"""
+        cart = Cart(self.request)
+        cart.add(self.product_a.id, quantity=2)
+        cart.update(self.product_a.id, quantity=10)
+        self.assertEqual(cart.cart[str(self.product_a.id)], 10)
+
+    def test_update_to_zero_removes_product(self):
+        """Updating quantity to 0 should remove the product entirely"""
+        cart = Cart(self.request)
+        cart.add(self.product_a.id, quantity=5)
+        cart.update(self.product_a.id, quantity=0)
+        self.assertNotIn(str(self.product_a.id), cart.cart)
+
+    def test_remove_product(self):
+        """Remove deletes the product from the cart"""
+        cart = Cart(self.request)
+        cart.add(self.product_a.id, quantity=2)
+        cart.add(self.product_b.id, quantity=4)
+        cart.remove(self.product_a.id)
+        self.assertNotIn(str(self.product_a.id), cart.cart)
+        self.assertIn(str(self.product_b.id), cart.cart)
+
+    def test_remove_nonexistent_product_does_not_error(self):
+        """Removing a product not in cart should fail silently"""
+        cart = Cart(self.request)
+        cart.remove(self.product_a.id)  # should not raise
+        self.assertEqual(cart.cart, {})
+
+    def test_clear_empties_cart(self):
+        """Clear removes all products"""
+        cart = Cart(self.request)
+        cart.add(self.product_a.id, quantity=2)
+        cart.add(self.product_b.id, quantity=4)
+        cart.clear()
+        self.assertEqual(cart.cart, {})
+
+    def test_cart_persists_across_instances_in_same_session(self):
+        """Two Cart instances on the same request see the same data"""
+        cart1 = Cart(self.request)
+        cart1.add(self.product_a.id, quantity=3)
+
+        cart2 = Cart(self.request)  # same session
+        self.assertEqual(cart2.cart[str(self.product_a.id)], 3)
+
+
+class ReorderTestCase(TestCase):
+    """
+    Test suite for TC-021: customer reorder function.
+    Reorder copies items from a past order back into the cart, handling
+    unavailable and out-of-stock products gracefully.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.producer = User.objects.create_user(
+            username='reorderproducer', password='testpass123',
+            email='rp@test.local', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='reordercustomer', password='testpass123',
+            email='rc@test.local', role='customer',
+        )
+        cls.product_available = Product.objects.create(
+            name='Available Product',
+            description='x', category='vegetables',
+            price=Decimal('5.00'), stock_quantity=10,
+            producer=cls.producer, is_available=True,
+        )
+        cls.product_unavailable = Product.objects.create(
+            name='Unavailable Product',
+            description='x', category='vegetables',
+            price=Decimal('5.00'), stock_quantity=10,
+            producer=cls.producer, is_available=False,
+        )
+        cls.product_out_of_stock = Product.objects.create(
+            name='Out Of Stock Product',
+            description='x', category='vegetables',
+            price=Decimal('5.00'), stock_quantity=0,
+            producer=cls.producer, is_available=True,
+        )
+
+    def _make_order_with_items(self, items):
+        """items: list of (product, quantity) tuples"""
+        order = Order.objects.create(
+            customer=self.customer,
+            total=Decimal('5.00'),
+            status='delivered',
+            delivery_date=timezone.now().date() + timedelta(days=3),
+            delivery_address='Bristol',
+        )
+        for product, qty in items:
+            OrderItem.objects.create(
+                order=order, product=product,
+                quantity=qty, price=product.price,
+            )
+        return order
+
+    def test_reorder_adds_available_items_to_cart(self):
+        """All available, in-stock items should land in cart"""
+        order = self._make_order_with_items([(self.product_available, 3)])
+        self.client.login(username='reordercustomer', password='testpass123')
+
+        self.client.post(reverse('reorder', args=[order.id]))
+
+        # Need to fetch session to see cart
+        session = self.client.session
+        cart = session.get('cart', {})
+        self.assertEqual(cart.get(str(self.product_available.id)), 3)
+
+    def test_reorder_skips_unavailable_products(self):
+        """Products marked is_available=False should not be added"""
+        order = self._make_order_with_items([
+            (self.product_available, 2),
+            (self.product_unavailable, 1),
+        ])
+        self.client.login(username='reordercustomer', password='testpass123')
+
+        self.client.post(reverse('reorder', args=[order.id]))
+
+        cart = self.client.session.get('cart', {})
+        self.assertIn(str(self.product_available.id), cart)
+        self.assertNotIn(str(self.product_unavailable.id), cart)
+
+    def test_reorder_skips_out_of_stock_products(self):
+        """Products with stock_quantity=0 should not be added"""
+        order = self._make_order_with_items([
+            (self.product_out_of_stock, 5),
+        ])
+        self.client.login(username='reordercustomer', password='testpass123')
+
+        self.client.post(reverse('reorder', args=[order.id]))
+
+        cart = self.client.session.get('cart', {})
+        self.assertNotIn(str(self.product_out_of_stock.id), cart)
+
+    def test_reorder_caps_quantity_at_current_stock(self):
+        """If original order qty exceeds current stock, cap at stock"""
+        order = self._make_order_with_items([(self.product_available, 50)])  # only 10 in stock
+        self.client.login(username='reordercustomer', password='testpass123')
+
+        self.client.post(reverse('reorder', args=[order.id]))
+
+        cart = self.client.session.get('cart', {})
+        self.assertEqual(cart.get(str(self.product_available.id)), 10)
+
+    def test_reorder_blocked_for_other_customers_orders(self):
+        """Customer can't reorder another customer's order"""
+        other_customer = User.objects.create_user(
+            username='other', password='testpass123',
+            email='other@test.local', role='customer',
+        )
+        order = Order.objects.create(
+            customer=other_customer,
+            total=Decimal('5.00'),
+            status='delivered',
+            delivery_date=timezone.now().date() + timedelta(days=3),
+            delivery_address='Bristol',
+        )
+        OrderItem.objects.create(
+            order=order, product=self.product_available,
+            quantity=3, price=self.product_available.price,
+        )
+        self.client.login(username='reordercustomer', password='testpass123')
+
+        response = self.client.post(reverse('reorder', args=[order.id]))
+
+        cart = self.client.session.get('cart', {})
+        self.assertEqual(cart, {})  # nothing added — order didn't belong to this customer
+        self.assertEqual(response.status_code, 404)
+
+    def test_reorder_blocked_for_producer_role(self):
+        """Producer can't use reorder endpoint"""
+        order = self._make_order_with_items([(self.product_available, 2)])
+        self.client.login(username='reorderproducer', password='testpass123')
+
+        self.client.post(reverse('reorder', args=[order.id]))
+
+        cart = self.client.session.get('cart', {})
+        self.assertEqual(cart, {})
