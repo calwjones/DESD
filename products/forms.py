@@ -1,5 +1,5 @@
 from django import forms
-from .models import ALLERGEN_CHOICES, Product
+from .models import ALLERGEN_CHOICES, Product, Review
 
 
 class ProductForm(forms.ModelForm):
@@ -62,3 +62,35 @@ class ProductForm(forms.ModelForm):
                 self.add_error('surplus_expires_at', 'An expiry time is required for surplus listings.')
 
         return cleaned_data
+
+
+class ReviewForm(forms.ModelForm):
+    class Meta:
+        model = Review
+        fields = ['rating', 'title', 'body']
+        widgets = {
+            'rating': forms.Select(choices=[
+                (5, '★★★★★ Excellent'),
+                (4, '★★★★☆ Good'),
+                (3, '★★★☆☆ Average'),
+                (2, '★★☆☆☆ Poor'),
+                (1, '★☆☆☆☆ Bad'),
+            ]),
+            'title': forms.TextInput(attrs={'placeholder': 'Sum up your experience (optional)'}),
+            'body': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Tell other customers what you thought (optional)'}),
+        }
+    
+    def clean(self):
+        cleaned = super().clean()
+        title = (cleaned.get('title') or '').strip()
+        body = (cleaned.get('body') or '').strip()
+        
+        if bool(title) != bool(body):
+            raise forms.ValidationError(
+                "Please provide both a title and review text, or leave both blank."
+            )
+        
+        # Persist stripped values back so DB doesn't store leading/trailing whitespace
+        cleaned['title'] = title
+        cleaned['body'] = body
+        return cleaned

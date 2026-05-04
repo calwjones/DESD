@@ -9,6 +9,7 @@ from products.models import Product
 from services.os_places_service import PostcodesService
 import requests
 from django.conf import settings
+from django.db.models import Avg, Count, F
 
 DEMAND_SERVICE_URL = getattr(settings, 'DEMAND_SERVICE_URL')
 
@@ -21,6 +22,9 @@ def marketplace_view(request):
         Q(best_before_date__isnull=True) | Q(best_before_date__gte=today)
     ).select_related(
         'producer__producer_profile'
+    ).annotate(
+        avg_rating=Avg('reviews__rating'),
+        review_count=Count('reviews'),
     ).order_by('-created_at')
 
     query = request.GET.get('q', '').strip()
@@ -43,7 +47,17 @@ def marketplace_view(request):
         products = products.filter(is_surplus=True).filter(
             Q(surplus_expires_at__isnull=True) | Q(surplus_expires_at__gt=now)
         )
-
+    sort = request.GET.get('sort', '').strip()
+    if sort == 'rating':
+        products = products.order_by(
+            F('avg_rating').desc(nulls_last=True),
+            '-review_count',
+            '-created_at',
+        )
+    elif sort == 'price_asc':
+        products = products.order_by('price')
+    elif sort == 'price_desc':
+        products = products.order_by('-price')
     # Attach food_miles to each product if customer has a saved postcode
     products = list(products)
     for product in products:
@@ -68,6 +82,7 @@ def marketplace_view(request):
     return render(request, 'marketplace.html', {
         'products': products,
         'query': query,
+        'sort': sort,
         'selected_category': category,
         'organic_only': organic_only,
         'surplus_only': surplus_only,
@@ -120,5 +135,5 @@ def producer_dashboard_view(request):
         'products': products,
         'orders': orders,
         'demand_forecasts': demand_forecasts,
-        'low_stock_products': low_stock_products,  # new
+        'low_stock_products': low_stock_products, 
     })
