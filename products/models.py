@@ -94,9 +94,11 @@ class Product(models.Model):
         if just_dropped:
             self._send_low_stock_email()
             Product.objects.filter(pk=self.pk).update(low_stock_alerted=True)
+            self.low_stock_alerted = True  # keep in-memory consistent
         elif just_recovered:
             Product.objects.filter(pk=self.pk).update(low_stock_alerted=False)
-
+            self.low_stock_alerted = False
+            
 
     def _send_low_stock_email(self):
         from django.core.mail import send_mail
