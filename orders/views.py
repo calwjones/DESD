@@ -123,28 +123,27 @@ def checkout(request):
         form = CheckoutForm(request.POST)
         if form.is_valid():
             postcode = form.cleaned_data["postcode"]
-
-            # Verify postcode via postcodes.io and get lat/lng for food miles
             service = PostcodesService()
             location = service.lookup_postcode(postcode)
-
+            
             if location == PostcodesService.NETWORK_ERROR:
-                form.add_error("postcode", "Could not reach the postcode service — please try again later.")
-                return render(request, "orders/checkout.html", {
-                    "form": form,
-                    "producers_data": producers_data,
-                    "total": total,
-                    "commission_amount": commission_amount,
-                })
+                # API down - accept the postcode without enrichment so checkout
+                # isn't blocked by a third-party outage
+                messages.warning(
+                    request,
+                    "Could not verify postcode against the postcode service. "
+                    "Your order will be processed using the postcode as entered."
+                )
+                location = None
             elif not location:
-                form.add_error("postcode", "Invalid postcode — please check and try again.")
+                form.add_error("postcode", "Invalid postcode - please check and try again.")
                 return render(request, "orders/checkout.html", {
                     "form": form,
                     "producers_data": producers_data,
                     "total": total,
                     "commission_amount": commission_amount,
                 })
-
+            
             # Validate stock before creating the order
             out_of_stock = [
                 item for item in cart_items
@@ -154,9 +153,13 @@ def checkout(request):
                 names = ", ".join(i["product"].name for i in out_of_stock)
                 messages.error(request, f"Not enough stock for: {names}. Please update your basket.")
                 return redirect("view_cart")
-
-            # Save order as pending
-            full_address = f"{form.cleaned_data['delivery_address']}, {location['town']}, {postcode}"
+            
+            # Build address with or without town
+            if location:
+                full_address = f"{form.cleaned_data['delivery_address']}, {location['town']}, {postcode}"
+            else:
+                full_address = f"{form.cleaned_data['delivery_address']}, {postcode}"
+                
             order = Order.objects.create(
                 customer=request.user,
                 total=total,

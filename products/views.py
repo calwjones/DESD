@@ -3,19 +3,31 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 
 from products.ai_grading import grade_product_image
-from .forms import ProductForm
-from .models import Product
+from .forms import ProductForm, ReviewForm
+from .models import Product, Review
+from orders.models import Order
 from services.os_places_service import PostcodesService
+from django.db.models import Avg, Count
+
+
+
+
 
 
 @login_required
 def product_detail(request, pk):
     product = get_object_or_404(Product, pk=pk)
     food_miles = PostcodesService.get_food_miles(request.user, product.producer)
+    reviews_aggregate = product.reviews.aggregate(
+        avg=Avg('rating'),
+        count=Count('id'),
+    )
     return render(request, 'products/product_detail.html', {
         'product': product,
         'food_miles': food_miles,
         'customer_has_postcode': bool(request.user.postcode),
+        'average_rating': reviews_aggregate['avg'] or 0,
+        'reviews_count': reviews_aggregate['count'],
     })
 
 
@@ -110,3 +122,47 @@ def challenge_grade(request, pk):
         else:
             messages.error(request, 'Invalid grade selected.')
     return redirect('products:detail', pk=pk)
+
+
+@login_required
+def write_review(request, product_id):
+    if request.user.role != 'customer':
+        messages.error(request, "Only customers can write reviews.")
+        return redirect('marketplace')
+
+    product = get_object_or_404(Product, id=product_id)
+
+    # Must have at least one delivered order containing this product
+    has_delivered_order = Order.objects.filter(
+        customer=request.user,
+        status='delivered',
+        items__product=product,
+    ).exists()
+
+    if not has_delivered_order:
+        messages.error(request, "You can only review products you've received.")
+        return redirect('order_history')
+
+    # Already reviewed?
+    existing = Review.objects.filter(product=product, customer=request.user).first()
+    if existing:
+        messages.info(request, "You've already reviewed this product.")
+        return redirect('products:detail', pk=product.id)
+
+    if request.method == 'POST':
+        form = ReviewForm(request.POST)
+        if form.is_valid():
+            review = form.save(commit=False)
+            review.product = product
+            review.customer = request.user
+            review.is_verified_purchase = True  # gate ensures this
+            review.save()
+            messages.success(request, "Review posted. Thank you!")
+            return redirect('products:detail', pk=product.id)
+    else:
+        form = ReviewForm()
+
+    return render(request, 'products/write_review.html', {
+        'form': form,
+        'product': product,
+    })

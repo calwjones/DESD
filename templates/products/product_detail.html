@@ -174,7 +174,42 @@
   </div>
   {% endif %}
 
+  {# ── Reviews ─────────────────────────────────────────────────── #}
+  <div class="card" style="margin-top: 1.5rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <h2 style="font-size: 1.1rem; font-weight: 600; margin:0;">Customer Reviews</h2>
+      {% if reviews_count %}
+        <span style="font-size:0.9rem; color:var(--muted);">
+          {{ average_rating|floatformat:1 }} ★ · {{ reviews_count }} review{{ reviews_count|pluralize }}
+        </span>
+      {% endif %}
+    </div>
+
+    {% if product.reviews.all %}
+      {% for review in product.reviews.all %}
+      <div style="border-top: 1px solid var(--border); padding: 0.75rem 0;">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.75rem; flex-wrap:wrap;">
+          <div>
+            {% if review.title %}<strong>{{ review.title }}</strong>{% endif %}
+            {% if review.is_verified_purchase %}
+              <span class="badge badge-green" style="font-size:0.7rem; margin-left:0.4rem;">Verified purchase</span>
+            {% endif %}
+          </div>
+          <span style="color:#e67e22; font-size:0.9rem;">{% for _ in "12345"|make_list %}{% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}{% endfor %}</span>
+        </div>
+        {% if review.body %}
+          <p style="margin: 0.5rem 0; color: var(--text);">{{ review.body }}</p>
+        {% endif %}
+        <small style="color:var(--muted);">— {{ review.customer.username }}, {{ review.created_at|date:"d M Y" }}</small>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p style="color:var(--muted); font-style:italic;">No reviews yet.</p>
+    {% endif %}
+  </div>
 </div>
+
+
 
 <script>
 document.querySelectorAll('form[data-bb-warning]').forEach(function(form) {
