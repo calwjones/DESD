@@ -7,9 +7,12 @@ from .models import CustomUser
 
 
 class RegisterForm(UserCreationForm):
+    # Logistics is admin-only (sees other producers' delivery info) — not exposed here.
     PUBLIC_ROLES = [
         ('customer', 'Customer'),
         ('producer', 'Producer'),
+        ('community_group', 'Community Group'),
+        ('restaurant', 'Restaurant'),
     ]
     role = forms.ChoiceField(choices=PUBLIC_ROLES)
 

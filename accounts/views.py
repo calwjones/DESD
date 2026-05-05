@@ -49,7 +49,7 @@ def logout_view(request):
 
 @login_required
 def profile_view(request):
-    if request.user.role != 'customer':
+    if not request.user.is_buyer:
         return redirect('producer_dashboard')
 
     if request.method == 'POST':
@@ -88,7 +88,7 @@ def profile_view(request):
 
 @login_required
 def toggle_favourite(request, producer_id):
-    if request.method != 'POST' or request.user.role != 'customer':
+    if request.method != 'POST' or not request.user.is_buyer:
         return redirect('marketplace')
     producer = get_object_or_404(CustomUser, pk=producer_id, role='producer')
     fav, created = FavouriteProducer.objects.get_or_create(customer=request.user, producer=producer)

@@ -17,4 +17,10 @@ urlpatterns = [
     path("order/<int:order_id>/pack-all/", views.pack_all_items, name="pack_all_items"),
     path("order/<int:order_id>/mark-ready/", views.mark_order_ready, name="mark_order_ready"),
     path("order/<int:order_id>/ship/", views.ship_order, name="ship_order"),
+    # TC-018: recurring orders
+    path("recurring/", views.recurring_orders_list, name="recurring_orders_list"),
+    path("recurring/save/", views.save_cart_as_recurring, name="save_cart_as_recurring"),
+    path("recurring/<int:pk>/", views.recurring_order_detail, name="recurring_order_detail"),
+    path("recurring/<int:pk>/toggle/", views.recurring_order_toggle, name="recurring_order_toggle"),
+    path("recurring/<int:pk>/delete/", views.recurring_order_delete, name="recurring_order_delete"),
 ]

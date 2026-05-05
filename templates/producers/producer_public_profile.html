@@ -17,7 +17,7 @@
         <a href="{% url 'producers:story_add' %}" class="btn btn-primary">+ Add Story</a>
         <a href="{% url 'producers:edit_profile' %}" class="btn btn-secondary">Edit Profile</a>
       {% endif %}
-      {% if request.user.role == 'customer' %}
+      {% if request.user.is_buyer %}
         <form method="post" action="{% url 'accounts:toggle_favourite' producer.pk %}">
           {% csrf_token %}
           <button type="submit" class="btn btn-secondary">

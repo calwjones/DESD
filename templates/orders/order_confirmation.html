@@ -26,6 +26,35 @@
       </div>
     </div>
 
+    {% if order.delivery_instructions %}
+    <div class="card" style="background: var(--surface); margin-bottom: 1.25rem;">
+      <p style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem;">Delivery Instructions</p>
+      <p style="white-space: pre-line; font-size: 0.9rem;">{{ order.delivery_instructions }}</p>
+    </div>
+    {% endif %}
+
+    {% if order.items.all %}
+    <div class="card" style="background: var(--surface); margin-bottom: 1.25rem;">
+      <p style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem;">Producer Contacts (for coordination)</p>
+      {% regroup order.items.all by product.producer as producer_groups %}
+      {% for group in producer_groups %}
+      <div style="font-size: 0.85rem; padding: 0.3rem 0;">
+        <strong>
+          {% if group.grouper.producer_profile and group.grouper.producer_profile.business_name %}
+            {{ group.grouper.producer_profile.business_name }}
+          {% else %}
+            {{ group.grouper.username }}
+          {% endif %}
+        </strong>
+        &middot;
+        <a href="mailto:{% if group.grouper.producer_profile.contact_email %}{{ group.grouper.producer_profile.contact_email }}{% else %}{{ group.grouper.email }}{% endif %}" style="color: var(--accent);">
+          {% if group.grouper.producer_profile.contact_email %}{{ group.grouper.producer_profile.contact_email }}{% else %}{{ group.grouper.email }}{% endif %}
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <h2 style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.75rem;">Items</h2>
     <table class="product-table">
       <thead>

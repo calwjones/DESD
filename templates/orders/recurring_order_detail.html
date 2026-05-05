@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ recurring_order.name|default:"Recurring Order" }}{% endblock %}
+{% block content %}
+
+<div class="dashboard-header">
+  <h1>{{ recurring_order.name|default:"(Untitled recurring order)" }}</h1>
+  <a href="{% url 'recurring_orders_list' %}" class="btn btn-secondary btn-sm">Back to List</a>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+  <div class="detail-grid">
+    <div class="detail-item">
+      <label>Status</label>
+      <p>
+        {% if recurring_order.is_active %}
+          <span class="badge badge-green">Active</span>
+        {% else %}
+          <span class="badge" style="background: var(--muted); color: white;">Paused</span>
+        {% endif %}
+      </p>
+    </div>
+    <div class="detail-item">
+      <label>Generates every</label>
+      <p>{{ recurring_order.get_recurrence_day_display }}</p>
+    </div>
+    <div class="detail-item">
+      <label>Delivers</label>
+      <p>{{ recurring_order.get_delivery_day_display }}</p>
+    </div>
+    <div class="detail-item">
+      <label>Last generated</label>
+      <p>{{ recurring_order.last_generated_at|default:"Never"|date:"d M Y H:i" }}</p>
+    </div>
+    <div class="detail-item">
+      <label>Delivery address</label>
+      <p style="white-space: pre-line;">{{ recurring_order.delivery_address }}</p>
+    </div>
+    {% if recurring_order.delivery_instructions %}
+    <div class="detail-item">
+      <label>Delivery instructions</label>
+      <p style="white-space: pre-line;">{{ recurring_order.delivery_instructions }}</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem;">Items</h2>
+<div class="card" style="padding: 0; overflow: hidden;">
+  <table class="product-table">
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th>Producer</th>
+        <th>Quantity</th>
+        <th>Current Price</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in recurring_order.items.all %}
+      <tr>
+        <td style="font-weight: 500;">{{ item.product.name }}</td>
+        <td style="color: var(--muted);">
+          {% if item.product.producer.producer_profile.business_name %}
+            {{ item.product.producer.producer_profile.business_name }}
+          {% else %}
+            {{ item.product.producer.username }}
+          {% endif %}
+        </td>
+        <td>{{ item.quantity }}</td>
+        <td>£{{ item.product.current_price }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+  <form method="post" action="{% url 'recurring_order_toggle' recurring_order.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-secondary">
+      {% if recurring_order.is_active %}Pause this template{% else %}Resume this template{% endif %}
+    </button>
+  </form>
+  <form method="post" action="{% url 'recurring_order_delete' recurring_order.pk %}"
+        onsubmit="return confirm('Delete this recurring order template?');">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Delete</button>
+  </form>
+</div>
+
+{% endblock %}

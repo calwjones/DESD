@@ -64,7 +64,7 @@ def marketplace_view(request):
         product.food_miles = PostcodesService.get_food_miles(request.user, product.producer)
 
     # Filter out products containing any of the customer's avoided allergens
-    if hide_allergens and request.user.role == 'customer' and request.user.avoided_allergens:
+    if hide_allergens and request.user.is_buyer and request.user.avoided_allergens:
         avoided = set(a.strip() for a in request.user.avoided_allergens.split(',') if a.strip())
         products = [
             p for p in products
@@ -74,7 +74,7 @@ def marketplace_view(request):
     categories = Product.CATEGORY_CHOICES
 
     favourite_producer_ids = set()
-    if request.user.role == 'customer':
+    if request.user.is_buyer:
         favourite_producer_ids = set(
             FavouriteProducer.objects.filter(customer=request.user).values_list('producer_id', flat=True)
         )
@@ -90,13 +90,13 @@ def marketplace_view(request):
         'categories': categories,
         'customer_has_postcode': bool(request.user.postcode),
         'favourite_producer_ids': favourite_producer_ids,
-        'user_has_allergens': bool(request.user.role == 'customer' and request.user.avoided_allergens),
+        'user_has_allergens': bool(request.user.is_buyer and request.user.avoided_allergens),
     })
 
 
 @login_required
 def producer_dashboard_view(request):
-    if request.user.role == 'customer':
+    if request.user.is_buyer:
         return redirect('marketplace')
     products = Product.objects.filter(producer=request.user).order_by('-created_at')
     low_stock_products = [p for p in products if p.is_low_stock]
