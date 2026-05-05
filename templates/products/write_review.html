@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Review {{ product.name }}{% endblock %}
+{% block content %}
+
+<div class="dashboard-header">
+  <h1>Write a Review</h1>
+</div>
+
+<div class="card" style="max-width: 700px;">
+  <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">{{ product.name }}</h2>
+  <p style="color: var(--muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
+    Share your experience to help other customers.
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div style="margin-bottom: 1rem; padding: 0.6rem 0.8rem; background: #fef2f2; border-left: 4px solid #c0392b; color: #c0392b; font-size: 0.85rem;">
+            {{ form.non_field_errors|first }}
+        </div>
+    {% endif %}
+
+    <div style="margin-bottom: 1rem;">
+      <label for="{{ form.rating.id_for_label }}" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Rating</label>
+      {{ form.rating }}
+      {% if form.rating.errors %}
+        <p style="color:#c0392b; font-size:0.8rem; margin-top:0.25rem;">{{ form.rating.errors|first }}</p>
+      {% endif %}
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+      <label for="{{ form.title.id_for_label }}" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Title</label>
+      {{ form.title }}
+      {% if form.title.errors %}
+        <p style="color:#c0392b; font-size:0.8rem; margin-top:0.25rem;">{{ form.title.errors|first }}</p>
+      {% endif %}
+    </div>
+
+    <div style="margin-bottom: 1.5rem;">
+      <label for="{{ form.body.id_for_label }}" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Review</label>
+      {{ form.body }}
+      {% if form.body.errors %}
+        <p style="color:#c0392b; font-size:0.8rem; margin-top:0.25rem;">{{ form.body.errors|first }}</p>
+      {% endif %}
+    </div>
+
+    <div style="display:flex; gap:0.5rem;">
+      <button type="submit" class="btn">Post Review</button>
+      <a href="{% url 'order_history' %}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

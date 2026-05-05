@@ -82,10 +82,11 @@ class CheckoutFormTestCase(TestCase):
         valid_date = timezone.now().date() + timedelta(days=3)
         
         form = CheckoutForm(data={
-            'delivery_address': '123 Test Street, Bristol, BS1 1AB',
+            'postcode': 'BS1 1AB',
+            'delivery_address': '123 Test Street, Bristol',
             'delivery_date': valid_date
         })
-        
+
         self.assertTrue(form.is_valid())
     
     def test_form_requires_delivery_address(self):
@@ -115,15 +116,17 @@ class CheckoutFormTestCase(TestCase):
         valid_date = timezone.now().date() + timedelta(days=5)
         
         form = CheckoutForm(data={
-            'delivery_address': '123 Test Street, Bristol, BS1 1AB',
+            'postcode': 'BS1 1AB',
+            'delivery_address': '123 Test Street, Bristol',
             'delivery_date': valid_date
         })
         
         self.assertTrue(form.is_valid())
         self.assertEqual(
             form.cleaned_data['delivery_address'],
-            '123 Test Street, Bristol, BS1 1AB'
+            '123 Test Street, Bristol'
         )
+        self.assertEqual(form.cleaned_data['postcode'], 'BS1 1AB')
         self.assertEqual(form.cleaned_data['delivery_date'], valid_date)
 
 
@@ -849,6 +852,82 @@ class CartTestCase(TestCase):
         cart2 = Cart(self.request)  # same session
         self.assertEqual(cart2.cart[str(self.product_a.id)], 3)
 
+class CheckoutResilienceTestCase(TestCase):
+    """
+    Test suite for checkout robustness when postcodes.io is unreachable.
+    Soft-pass behaviour: NETWORK_ERROR should not block checkout, but invalid
+    postcodes (API reachable, postcode not real) still reject.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.producer = User.objects.create_user(
+            username='resilienceproducer', password='testpass123',
+            email='rp@test.local', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='resiliencecustomer', password='testpass123',
+            email='rc@test.local', role='customer',
+        )
+        cls.product = Product.objects.create(
+            name='Test Product',
+            description='x', category='vegetables',
+            price=Decimal('5.00'), stock_quantity=10,
+            producer=cls.producer, is_available=True,
+        )
+
+    def _add_to_cart_and_login(self):
+        self.client.login(username='resiliencecustomer', password='testpass123')
+        # Add product via the cart endpoint to populate session
+        self.client.post(
+            reverse('add_to_cart', args=[self.product.id]),
+            data={'quantity': 1},
+        )
+
+    @patch('orders.views.PostcodesService')
+    def test_checkout_proceeds_when_postcodes_api_unreachable(self, mock_service_class):
+        """NETWORK_ERROR from postcodes.io should not block checkout"""
+        from services.os_places_service import PostcodesService as RealService
+        
+        mock_service = mock_service_class.return_value
+        mock_service.lookup_postcode.return_value = RealService.NETWORK_ERROR
+        # NETWORK_ERROR sentinel must match the real one for the comparison
+        mock_service_class.NETWORK_ERROR = RealService.NETWORK_ERROR
+        
+        self._add_to_cart_and_login()
+        
+        valid_date = timezone.now().date() + timedelta(days=3)
+        response = self.client.post(reverse('checkout'), data={
+            'postcode': 'BS1 1AB',
+            'delivery_address': '23 High Street, Bristol',
+            'delivery_date': valid_date,
+        })
+        
+        # Should redirect to Stripe (or wherever payment goes), not re-render the form
+        self.assertNotEqual(response.status_code, 200, 
+            "Form re-rendered — checkout was blocked when API was unreachable")
+        # If a redirect, it shouldn't be back to checkout
+        if response.status_code == 302:
+            self.assertNotIn('/checkout/', response.url)
+
+    @patch('orders.views.PostcodesService')
+    def test_checkout_rejects_invalid_postcode_when_api_works(self, mock_service_class):
+        """If API is reachable but postcode is invalid, form should re-render with error"""
+        mock_service = mock_service_class.return_value
+        mock_service.lookup_postcode.return_value = None  # API said: not a real postcode
+        
+        self._add_to_cart_and_login()
+        
+        valid_date = timezone.now().date() + timedelta(days=3)
+        response = self.client.post(reverse('checkout'), data={
+            'postcode': 'XX99 9XX',
+            'delivery_address': '23 High Street, Bristol',
+            'delivery_date': valid_date,
+        })
+        
+        # Form re-renders with error
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Invalid postcode')
 
 class ReorderTestCase(TestCase):
     """

@@ -14,6 +14,18 @@
   </div>
 </div>
 
+{% if low_stock_products %}
+<div class="card" style="margin-bottom: 1rem; border-left: 4px solid #c0392b; background: #fef2f2;">
+  <strong style="color: #c0392b;">Low stock alert</strong>
+  <p style="margin: 0.4rem 0 0 0; font-size: 0.9rem;">
+    {{ low_stock_products|length }} product{{ low_stock_products|length|pluralize }} at or below threshold:
+    {% for p in low_stock_products %}
+      <strong>{{ p.name }}</strong> ({{ p.stock_quantity }} left{% if p.stock_threshold %}, threshold {{ p.stock_threshold }}{% endif %}){% if not forloop.last %}, {% endif %}
+    {% endfor %}
+  </p>
+</div>
+{% endif %}
+
 {% if products %}
   <div class="card" style="padding: 0; overflow: hidden;">
     <table class="product-table">
@@ -34,7 +46,14 @@
           <td><strong>{{ product.name }}</strong></td>
           <td>{{ product.get_category_display }}</td>
           <td style="font-family:'DM Mono',monospace;">£{{ product.price }}</td>
-          <td>{{ product.stock_quantity }}</td>
+          <td>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <span>{{ product.stock_quantity }}</span>
+              {% if product.is_low_stock %}
+                <span class="badge" style="background:#c0392b;color:#fff;font-size:0.7rem;white-space:nowrap;">Low stock</span>
+              {% endif %}
+            </div>
+          </td>
           <td>
             {% if product.is_available %}
               <span class="badge badge-green">Available</span>
