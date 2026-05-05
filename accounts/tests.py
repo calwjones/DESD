@@ -142,6 +142,37 @@ class CustomerRegistrationTest(TestCase):
         logged_in = client.login(username='wrongpwcustomer', password='WrongPassword!')
         self.assertFalse(logged_in)
 
+    def test_customer_postcode_saved_via_profile(self):
+        """Customer can save their postcode via the profile page after registration"""
+        # Register
+        self.client.post(reverse('accounts:register'), data={
+            'username': 'pccustomer',
+            'email': 'pc@customer.local',
+            'role': 'customer',
+            'password1': 'SecureP@ss123!',
+            'password2': 'SecureP@ss123!',
+        })
+        # Now log in and update profile (auto-login should be active from register, but explicit here)
+        self.client.login(username='pccustomer', password='SecureP@ss123!')
+        
+        # POST to profile with postcode — needs PostcodesService mocked since it's external
+        from unittest.mock import patch
+        with patch('accounts.views.PostcodesService') as mock_service_class:
+            mock_service = mock_service_class.return_value
+            mock_service.lookup_postcode.return_value = {
+                'postcode': 'BS1 5JG',
+                'latitude': 51.45,
+                'longitude': -2.59,
+                'town': 'Bristol',
+            }
+            self.client.post(reverse('accounts:profile'), data={
+                'email': 'pc@customer.local',
+                'postcode': 'BS1 5JG',
+            })
+        
+        user = User.objects.get(username='pccustomer')
+        self.assertEqual(user.postcode, 'BS1 5JG')
+
 
 class AuthorisationTest(TestCase):
     """
@@ -274,4 +305,10 @@ class AuthorisationTest(TestCase):
         })
         # Should still be redirected from protected pages
         response = self.client.get(reverse('producer_dashboard'))
+        self.assertEqual(response.status_code, 302)
+
+    def test_customer_blocked_from_add_product(self):
+        """Customer hitting product add URL should be blocked"""
+        self.client.login(username='authcustomer', password='SecureP@ss123!')
+        response = self.client.get(reverse('products:add'))
         self.assertEqual(response.status_code, 302)
