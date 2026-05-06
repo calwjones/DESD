@@ -20,6 +20,7 @@ from .models import (
     RecurringOrderItem,
     Settlement,
 )
+from delivery.models import Delivery
 from .services import calculate_commission_split
 from .validators import validate_delivery_date
 
@@ -1014,3 +1015,247 @@ class RecurringOrderTest(TestCase):
         template_item = ro.items.first()
         self.assertEqual(template_item.quantity, original_template_qty)
         self.assertNotEqual(template_item.quantity, order_item.quantity)
+
+
+class MultiProducerCheckoutTest(TestCase):
+    """TC-008 — multi-vendor checkout creates a single Order with items from each producer."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.customer = User.objects.create_user(
+            username='mpcust', email='mpc@test.local',
+            password='testpass123', role='customer',
+        )
+        cls.producer1 = User.objects.create_user(
+            username='mpprod1', email='mpp1@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.producer2 = User.objects.create_user(
+            username='mpprod2', email='mpp2@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.product1 = Product.objects.create(
+            producer=cls.producer1, name='MP Carrots',
+            description='F', category='vegetables',
+            price=Decimal('5.00'), stock_quantity=20, is_available=True,
+        )
+        cls.product2 = Product.objects.create(
+            producer=cls.producer2, name='MP Milk',
+            description='F', category='dairy',
+            price=Decimal('3.00'), stock_quantity=20, is_available=True,
+        )
+
+    @patch('orders.views.stripe.checkout.Session.create')
+    @patch('orders.views.PostcodesService')
+    def test_multi_producer_cart_creates_single_order(self, mock_postcodes_class, mock_stripe_create):
+        """Cart with products from 2 producers → 1 Order, 2+ OrderItems after checkout."""
+        mock_postcodes = mock_postcodes_class.return_value
+        mock_postcodes.lookup_postcode.return_value = {
+            'address': '12 High Street', 'town': 'Bristol',
+            'postcode': 'BS1 1AB', 'latitude': 51.45, 'longitude': -2.6,
+        }
+        mock_stripe_create.return_value = _FakeStripeSession({
+            'id': 'sess_mp_1',
+            'url': 'https://stripe.example/sess_mp_1',
+        })
+
+        self.client.login(username='mpcust', password='testpass123')
+        self.client.post(reverse('add_to_cart', args=[self.product1.id]), data={'quantity': 1})
+        self.client.post(reverse('add_to_cart', args=[self.product2.id]), data={'quantity': 1})
+
+        response = self.client.post(reverse('checkout'), data={
+            'postcode': 'BS1 1AB',
+            'delivery_address': '12 High Street',
+            'delivery_date': timezone.now().date() + timedelta(days=3),
+        })
+        self.assertEqual(response.status_code, 302)
+
+        orders = Order.objects.filter(customer=self.customer)
+        self.assertEqual(orders.count(), 1)
+        order = orders.first()
+        self.assertGreaterEqual(order.items.count(), 2)
+        # Items must span both producers
+        producer_ids = set(item.product.producer_id for item in order.items.all())
+        self.assertEqual(len(producer_ids), 2)
+
+    def test_each_producer_sees_only_own_items(self):
+        """Producer 1 dashboard only shows items from their products, not Producer 2's."""
+        order = Order.objects.create(
+            customer=self.customer, total=Decimal('8.00'),
+            status='confirmed',
+            delivery_date=timezone.now().date() + timedelta(days=3),
+            delivery_address='12 High St, Bristol, BS1 1AB',
+        )
+        OrderItem.objects.create(order=order, product=self.product1, quantity=1, price=Decimal('5.00'))
+        OrderItem.objects.create(order=order, product=self.product2, quantity=1, price=Decimal('3.00'))
+
+        self.client.login(username='mpprod1', password='testpass123')
+        response = self.client.get(reverse('producer_dashboard'))
+        self.assertEqual(response.status_code, 200)
+        orders_in_context = list(response.context['orders'])
+        self.assertEqual(len(orders_in_context), 1)
+        producer_items = orders_in_context[0].producer_items
+        self.assertEqual(len(producer_items), 1)
+        self.assertEqual(producer_items[0].product_id, self.product1.id)
+
+
+class ProducerOrderViewTest(TestCase):
+    """TC-009 — producer dashboard scoping (own items only) + customer details."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.customer = User.objects.create_user(
+            username='pocust', email='poc@test.local',
+            password='testpass123', role='customer',
+        )
+        cls.producer1 = User.objects.create_user(
+            username='poprod1', email='pop1@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.producer2 = User.objects.create_user(
+            username='poprod2', email='pop2@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.product1 = Product.objects.create(
+            producer=cls.producer1, name='PO Apples',
+            description='F', category='fruit',
+            price=Decimal('4.00'), stock_quantity=20, is_available=True,
+        )
+        cls.product2 = Product.objects.create(
+            producer=cls.producer2, name='PO Cheese',
+            description='F', category='dairy',
+            price=Decimal('6.00'), stock_quantity=20, is_available=True,
+        )
+
+    def _make_dual_producer_order(self):
+        order = Order.objects.create(
+            customer=self.customer, total=Decimal('10.00'),
+            status='confirmed',
+            delivery_date=timezone.now().date() + timedelta(days=3),
+            delivery_address='42 Customer Road, Bristol, BS1 2CD',
+        )
+        OrderItem.objects.create(order=order, product=self.product1, quantity=1, price=Decimal('4.00'))
+        OrderItem.objects.create(order=order, product=self.product2, quantity=1, price=Decimal('6.00'))
+        return order
+
+    def test_producer_sees_only_own_order_items(self):
+        """Producer dashboard context contains only items from their products."""
+        self._make_dual_producer_order()
+        self.client.login(username='poprod1', password='testpass123')
+        response = self.client.get(reverse('producer_dashboard'))
+        orders_in_context = list(response.context['orders'])
+        self.assertEqual(len(orders_in_context), 1)
+        for item in orders_in_context[0].producer_items:
+            self.assertEqual(item.product.producer_id, self.producer1.id)
+
+    def test_producer_cannot_see_other_producer_items(self):
+        """Items from another producer's products absent from dashboard context."""
+        self._make_dual_producer_order()
+        self.client.login(username='poprod1', password='testpass123')
+        response = self.client.get(reverse('producer_dashboard'))
+        orders_in_context = list(response.context['orders'])
+        item_product_ids = [item.product_id for item in orders_in_context[0].producer_items]
+        self.assertIn(self.product1.id, item_product_ids)
+        self.assertNotIn(self.product2.id, item_product_ids)
+
+    def test_orders_show_customer_details(self):
+        """Order in dashboard context has customer username and delivery_address."""
+        self._make_dual_producer_order()
+        self.client.login(username='poprod1', password='testpass123')
+        response = self.client.get(reverse('producer_dashboard'))
+        self.assertContains(response, self.customer.username)
+        self.assertContains(response, '42 Customer Road')
+
+
+class OrderStatusTest(TestCase):
+    """TC-010 — producer updates order status through lifecycle.
+
+    NB: PR #16 moved per-producer tracking onto Delivery rows.
+    test_ship_order_sets_dispatched_and_tracking asserts the new behaviour
+    (Delivery.tracking_number + Delivery.producer_ready_at) instead of the
+    legacy Order.status='dispatched' + Order.tracking_number.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.customer = User.objects.create_user(
+            username='oscust', email='osc@test.local',
+            password='testpass123', role='customer',
+        )
+        cls.producer = User.objects.create_user(
+            username='osprod', email='osp@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.product = Product.objects.create(
+            producer=cls.producer, name='OS Veg',
+            description='F', category='vegetables',
+            price=Decimal('5.00'), stock_quantity=50, is_available=True,
+        )
+
+    def _make_confirmed_order(self, packed=False):
+        """Create order + item + flip to confirmed so the post_save signal makes Delivery."""
+        order = Order.objects.create(
+            customer=self.customer, total=Decimal('5.00'),
+            status='pending',
+            delivery_date=timezone.now().date() + timedelta(days=3),
+            delivery_address='1 OS Lane, Bristol, BS1 3EF',
+        )
+        item = OrderItem.objects.create(
+            order=order, product=self.product, quantity=1,
+            price=Decimal('5.00'), is_packed=packed,
+        )
+        order.status = 'confirmed'
+        order.save()
+        return order, item
+
+    def test_toggle_item_packed_flips_boolean(self):
+        """POST toggle_item_packed/pk/ → item.is_packed flips."""
+        _, item = self._make_confirmed_order(packed=False)
+        self.client.login(username='osprod', password='testpass123')
+
+        self.client.post(reverse('toggle_item_packed', args=[item.id]))
+        item.refresh_from_db()
+        self.assertTrue(item.is_packed)
+
+        self.client.post(reverse('toggle_item_packed', args=[item.id]))
+        item.refresh_from_db()
+        self.assertFalse(item.is_packed)
+
+    def test_mark_order_ready_sets_processing(self):
+        """POST mark_order_ready/pk/ with all items packed → order.status='processing'."""
+        order, _ = self._make_confirmed_order(packed=True)
+        self.client.login(username='osprod', password='testpass123')
+
+        self.client.post(reverse('mark_order_ready', args=[order.id]))
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'processing')
+
+    def test_ship_order_sets_dispatched_and_tracking(self):
+        """POST ship_order/pk/ → producer's Delivery has tracking_number + producer_ready_at.
+
+        Post-PR-#16 the per-producer tracking lives on Delivery (not Order).
+        Method name kept to match the testing guide; assertions reflect reality.
+        """
+        order, _ = self._make_confirmed_order(packed=True)
+        self.client.login(username='osprod', password='testpass123')
+
+        self.client.post(reverse('ship_order', args=[order.id]))
+        delivery = Delivery.objects.get(order=order, producer=self.producer)
+        self.assertIsNotNone(delivery.producer_ready_at)
+        self.assertTrue(delivery.tracking_number.startswith('DESD-'))
+        self.assertEqual(len(delivery.tracking_number), len('DESD-') + 10)
+
+    def test_ship_order_sends_dispatch_email(self):
+        """POST ship_order/pk/ → email sent to customer."""
+        from django.core import mail
+        mail.outbox = []
+        order, _ = self._make_confirmed_order(packed=True)
+        self.client.login(username='osprod', password='testpass123')
+
+        self.client.post(reverse('ship_order', args=[order.id]))
+        self.assertGreaterEqual(len(mail.outbox), 1)
+        recipients = [r for m in mail.outbox for r in m.to]
+        self.assertIn(self.customer.email, recipients)

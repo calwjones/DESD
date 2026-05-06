@@ -125,6 +125,16 @@
         <label>Delivery Date</label>
         <p>{{ order.delivery_date|date:"d M Y" }}</p>
       </div>
+      <div class="detail-item" style="grid-column: span 2;">
+        <label>Delivery Address</label>
+        <p style="white-space: pre-line;">{{ order.delivery_address }}</p>
+      </div>
+      {% if order.delivery_instructions %}
+      <div class="detail-item" style="grid-column: span 2;">
+        <label>Delivery Instructions</label>
+        <p style="white-space: pre-line; font-style: italic;">{{ order.delivery_instructions }}</p>
+      </div>
+      {% endif %}
     </div>
 
     <h3 style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.6rem;">Items to Pack</h3>
