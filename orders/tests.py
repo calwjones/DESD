@@ -11,7 +11,15 @@ from django.contrib.auth import get_user_model
 from products.models import Product
 from .forms import CheckoutForm
 from .management.commands.calculate_settlements import previous_week_bounds, week_containing
-from .models import Order, OrderItem, Payment, PaymentSplit, Settlement
+from .models import (
+    Order,
+    OrderItem,
+    Payment,
+    PaymentSplit,
+    RecurringOrder,
+    RecurringOrderItem,
+    Settlement,
+)
 from .services import calculate_commission_split
 from .validators import validate_delivery_date
 
@@ -816,3 +824,193 @@ class CheckoutResilienceTestCase(TestCase):
         # Form re-renders with error
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Invalid postcode')
+
+
+class CommunityGroupTest(TestCase):
+    """TC-017 — community group role + delivery_instructions on checkout."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.producer = User.objects.create_user(
+            username='cgproducer', email='cgp@test.local',
+            password='testpass123', role='producer',
+        )
+        # ProducerProfile is auto-created by signal; populate the business name
+        from producers.models import ProducerProfile
+        profile, _ = ProducerProfile.objects.get_or_create(user=cls.producer)
+        profile.business_name = 'Test Producer Farm'
+        profile.contact_email = 'farm@test.local'
+        profile.save()
+        cls.product = Product.objects.create(
+            producer=cls.producer, name='Bulk Veg Box',
+            description='Wholesale veg', category='vegetables',
+            price=Decimal('15.00'), stock_quantity=50, is_available=True,
+        )
+
+    def test_community_group_role_can_register(self):
+        """POST register with role=community_group → user.role='community_group'."""
+        User = get_user_model()
+        response = self.client.post(reverse('accounts:register'), data={
+            'username': 'kitchencg',
+            'email': 'kitchencg@test.local',
+            'role': 'community_group',
+            'password1': 'TestPass123!',
+            'password2': 'TestPass123!',
+        })
+        self.assertEqual(response.status_code, 302)
+        user = User.objects.get(username='kitchencg')
+        self.assertEqual(user.role, 'community_group')
+        self.assertTrue(user.is_buyer)
+
+    @patch('orders.views.stripe.checkout.Session.create')
+    @patch('orders.views.PostcodesService')
+    def test_delivery_instructions_saved_on_checkout(self, mock_postcodes_class, mock_stripe_create):
+        """POST checkout with delivery_instructions → order.delivery_instructions saved."""
+        User = get_user_model()
+        cg = User.objects.create_user(
+            username='kitchen2', email='k2@test.local',
+            password='testpass123', role='community_group',
+        )
+        # Mock postcode lookup to succeed
+        mock_postcodes = mock_postcodes_class.return_value
+        mock_postcodes.lookup_postcode.return_value = {
+            'address': '12 High Street', 'town': 'Bristol',
+            'postcode': 'BS1 1AB', 'latitude': 51.45, 'longitude': -2.6,
+        }
+        # Mock Stripe session create
+        mock_stripe_create.return_value = _FakeStripeSession({
+            'id': 'sess_cg_1',
+            'url': 'https://stripe.example/session/sess_cg_1',
+        })
+
+        self.client.login(username='kitchen2', password='testpass123')
+        self.client.post(reverse('add_to_cart', args=[self.product.id]), data={'quantity': 2})
+
+        response = self.client.post(reverse('checkout'), data={
+            'postcode': 'BS1 1AB',
+            'delivery_address': '12 High Street',
+            'delivery_date': timezone.now().date() + timedelta(days=3),
+            'delivery_instructions': 'Delivery to kitchen — ask for chef.',
+        })
+        self.assertEqual(response.status_code, 302)  # redirect to Stripe URL
+        order = Order.objects.filter(customer=cg).order_by('-id').first()
+        self.assertIsNotNone(order)
+        self.assertEqual(order.delivery_instructions, 'Delivery to kitchen — ask for chef.')
+
+    def test_order_confirmation_shows_producer_contacts(self):
+        """assertContains(confirmation_response, producer_profile.business_name)."""
+        User = get_user_model()
+        cg = User.objects.create_user(
+            username='kitchen3', email='k3@test.local',
+            password='testpass123', role='community_group',
+        )
+        order = Order.objects.create(
+            customer=cg,
+            total=Decimal('30.00'),
+            status='confirmed',
+            delivery_date=timezone.now().date() + timedelta(days=3),
+            delivery_address='12 High Street, Bristol, BS1 1AB',
+            delivery_instructions='Leave at side gate.',
+        )
+        OrderItem.objects.create(
+            order=order, product=self.product, quantity=2, price=Decimal('15.00')
+        )
+
+        self.client.login(username='kitchen3', password='testpass123')
+        response = self.client.get(reverse('order_confirmation', args=[order.id]))
+        self.assertEqual(response.status_code, 200)
+        # Per the doc: confirmation must contain producer's business_name
+        self.assertContains(response, 'Test Producer Farm')
+        # And our delivery_instructions also surfaces
+        self.assertContains(response, 'Leave at side gate.')
+
+
+class RecurringOrderTest(TestCase):
+    """TC-018 — recurring orders: save, generate, edit-instance-doesnt-affect-template."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.producer = User.objects.create_user(
+            username='roproducer', email='rop@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='rocustomer', email='roc@test.local',
+            password='testpass123', role='customer',
+        )
+        cls.product = Product.objects.create(
+            producer=cls.producer, name='Carrots',
+            description='Fresh', category='vegetables',
+            price=Decimal('5.00'), stock_quantity=100, is_available=True,
+        )
+
+    def _make_template(self, quantity=2):
+        ro = RecurringOrder.objects.create(
+            customer=self.customer,
+            name='Weekly box',
+            recurrence_day=0,  # Monday
+            delivery_day=2,    # Wednesday
+            delivery_address='12 High Street, Bristol',
+            delivery_instructions='',
+        )
+        RecurringOrderItem.objects.create(
+            recurring_order=ro, product=self.product, quantity=quantity,
+        )
+        return ro
+
+    def test_customer_can_create_recurring_order(self):
+        """POST save_cart_as_recurring → RecurringOrder created in DB."""
+        self.client.login(username='rocustomer', password='testpass123')
+        # Seed cart
+        session = self.client.session
+        session['cart'] = {str(self.product.id): 3}
+        session.save()
+
+        response = self.client.post(reverse('save_cart_as_recurring'), data={
+            'name': 'My weekly box',
+            'recurrence_day': 0,
+            'delivery_day': 2,
+            'delivery_address': '12 High Street, Bristol',
+            'delivery_instructions': '',
+        })
+        self.assertEqual(response.status_code, 302)
+        ro = RecurringOrder.objects.filter(customer=self.customer).first()
+        self.assertIsNotNone(ro)
+        self.assertEqual(ro.name, 'My weekly box')
+        self.assertEqual(ro.items.count(), 1)
+        self.assertEqual(ro.items.first().quantity, 3)
+
+    def test_generate_command_creates_order_from_recurring(self):
+        """Call generate_recurring_orders → new Order created matching template items."""
+        ro = self._make_template(quantity=4)
+        before = Order.objects.filter(customer=self.customer).count()
+        out = StringIO()
+        call_command('generate_recurring_orders', '--all', stdout=out)
+        after = Order.objects.filter(customer=self.customer).count()
+        self.assertEqual(after, before + 1)
+        new_order = Order.objects.filter(customer=self.customer).order_by('-id').first()
+        self.assertEqual(new_order.status, 'pending')
+        self.assertEqual(new_order.items.count(), 1)
+        self.assertEqual(new_order.items.first().quantity, 4)
+        ro.refresh_from_db()
+        self.assertIsNotNone(ro.last_generated_at)
+
+    def test_modifying_instance_does_not_affect_template(self):
+        """Edit generated Order quantity → RecurringOrderItem quantity unchanged."""
+        ro = self._make_template(quantity=2)
+        original_template_qty = ro.items.first().quantity
+        call_command('generate_recurring_orders', '--all', stdout=StringIO())
+        new_order = Order.objects.filter(customer=self.customer).order_by('-id').first()
+
+        # Modify the generated Order's item
+        order_item = new_order.items.first()
+        order_item.quantity = 99
+        order_item.save()
+
+        # Template should be untouched
+        ro.refresh_from_db()
+        template_item = ro.items.first()
+        self.assertEqual(template_item.quantity, original_template_qty)
+        self.assertNotEqual(template_item.quantity, order_item.quantity)
