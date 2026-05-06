@@ -2,15 +2,9 @@
 
 ## System Overview
 
-This project implements a marketplace platform for the Bristol
-Regional Food Network (BRFN). The system connects local producers
-with customers through an online marketplace where producers can
-list available produce and customers can browse and place orders.
+This project implements a marketplace platform for the Bristol Regional Food Network (BRFN). The system connects local producers with customers through an online marketplace where producers can list produce, customers can browse and place orders, and logistics staff can manage deliveries.
 
-The system design is based on business process models developed
-during Term 1. These diagrams guided the architecture of the
-Django application and helped identify the key actors and
-interactions within the system.
+The system design is based on business process models developed during Term 1. These diagrams guided the architecture of the Django application and helped identify the key actors and interactions within the system.
 
 ## Business Process Models
 
@@ -22,141 +16,137 @@ interactions within the system.
 
 ![Operational Diagram](docs/Operational_Diagram.png)
 
-The strategic diagram outlines the core actors and process flows within the system. The operational diagram expands this into a detailed workflow including order processing, payment settlement, and delivery coordination.
-
 ---
 
 ## System Architecture
 
-The application follows a **modular Django architecture** where different responsibilities are separated into dedicated apps.
+The application follows a **modular Django architecture** (MTV pattern) where different responsibilities are separated into dedicated apps.
 
-### Core Applications
+### Django Apps
 
 **accounts**
-
-Handles authentication and the custom user model.  
-Users can register as either **Customer** or **Producer**, enabling role-based access to system functionality.
+Handles authentication and the custom user model. Users register as **Customer**, **Producer**, or **Logistics**, enabling role-based access throughout the system. Includes postcode geocoding for food miles calculation and favourite producer functionality.
 
 **producers**
-
-Manages producer profiles including business name, location, contact details, and producer-specific dashboard functionality.
+Manages producer profiles including business name, bio, location, and contact details. Exposes a producer dashboard displaying owned listings and order activity.
 
 **products**
+Full CRUD for product listings. Products include pricing, stock levels, stock threshold alerts, category, allergen info, availability dates, surplus deals, and AI quality grades. Customers can leave verified reviews.
 
-Handles product listings including full **CRUD operations** (Create, Read, Update, Delete) for producers.  
-Products include pricing, stock levels, category information, allergen data, and availability dates.
+**orders**
+Shopping cart, multi-vendor checkout, and order lifecycle management (pending → confirmed → dispatched → delivered). Includes Stripe payment integration, payment splitting per producer, and weekly settlement calculations.
+
+**delivery**
+Logistics layer for order fulfilment. One `Delivery` record is created per producer per order on confirmation. Logistics staff progress deliveries through scheduled → collected → out for delivery → delivered, with order status rolled up automatically.
+
+**ai_logs**
+Logs all AI service interactions (quality grading and demand forecasting) including inputs, predictions, confidence scores, model versions, and any user overrides.
 
 **marketplace**
-
-Provides the main marketplace interface where customers can browse products and view available listings.
-
-This modular design improves maintainability and keeps responsibilities clearly separated.
-
+Main customer-facing browse interface with search, category filtering, and allergen filtering.
 
 ---
 
 ## Infrastructure and Containerisation
 
-The project uses **Docker Compose** to provide a reproducible development environment.
+The project uses **Docker Compose** to provide a reproducible development environment with five containers:
 
-Two containers are used:
-
-### Web Container
-Runs the Django application.
-
-### Database Container
-Runs a PostgreSQL database used by the Django ORM.
-
+| Container | Role |
+|---|---|
+| `desd-web` | Django application — serves the website on port 8089 |
+| `postgres:15` | PostgreSQL database |
+| `desd-ai-quality` | AI microservice for product image quality grading |
+| `desd-ai-demand` | AI microservice for demand forecasting |
+| `desd-ai-dashboard` | Dashboard for monitoring AI service metrics |
 
 Configuration values such as database credentials are stored in a **.env file**, ensuring sensitive information is not committed to the repository.
 
-An entrypoint script automatically runs database migrations when the container starts, ensuring the system can initialise correctly from a fresh clone.
+On startup, `entrypoint.sh` automatically runs migrations and loads fixtures so the system initialises correctly from a fresh clone.
 
 ---
 
 ## Database Design
 
-The system uses Django’s ORM to manage database operations and
-define the structure of the PostgreSQL database.
+The system uses Django's ORM to manage database operations against a PostgreSQL database. Key models and relationships:
 
-The main models represent users, producer profiles, and product
-listings. Relationships between these models are defined using
-Django fields such as `OneToOneField` and `ForeignKey`.
+- `CustomUser` — extends `AbstractUser` with role, postcode, coordinates, and allergen preferences
+- `ProducerProfile` — one-to-one with a producer `CustomUser`
+- `Product` — belongs to a producer; includes surplus deal fields and AI grading fields
+- `Review` — one per customer per product, requires verified purchase
+- `Order` / `OrderItem` — multi-vendor order with per-item producer tracking
+- `Payment` / `PaymentSplit` — Stripe payment record split per producer
+- `Settlement` — weekly producer payout records
+- `Delivery` — one per producer per order, tracks logistics status independently
+- `AIInteraction` — audit log for all AI service predictions
 
 ---
 
 ## Authentication and Authorisation
 
-Authentication is implemented using Django's built-in authentication system with a **custom user model extending AbstractUser**.
+Authentication uses Django's built-in system with a **custom user model extending AbstractUser**.
 
-Users select their role during registration:
+| Role | Access |
+|---|---|
+| **Customer** | Browse marketplace, place orders, write reviews, manage allergen preferences |
+| **Producer** | Manage own product listings, view orders, mark items ready for collection |
+| **Logistics** | View all deliveries, progress delivery statuses |
+| **Superuser** | Full Django admin access at `/admin/` |
 
-**Customer**
-- Browse products
-- View marketplace listings
-
-**Producer**
-- Manage product listings
-- Maintain producer profile
-- Access producer dashboard
-
-Access to views is protected using:
-
-- `login_required`
-- role-based permission checks
-
-This ensures that producers can only modify their own product listings.
+Access is protected using `@login_required` and role checks in views. Producers can only modify their own listings.
 
 ---
 
-## Sprint 1 Implementation
+## Signals
 
-Sprint 1 focused on establishing the **core system architecture and development environment**.
+Four signal handlers run automatically in response to model events:
 
-Implemented functionality includes:
-
-- Custom user model with role selection
-- Registration, login, and logout functionality
-- Role-based redirects after login
-- Producer dashboard displaying owned product listings
-- Customer marketplace displaying available products
-- Product CRUD operations for producers
-- Producer profile creation and editing
-- PostgreSQL database integration
-- Docker-based containerised environment
-- Environment variable configuration using `.env`
-- Automatic database migrations during container startup
-
-These features provide the foundation for further development in future sprints.
+| Signal | Trigger | Effect |
+|---|---|---|
+| `producers/signals.py` | `CustomUser` saved | Auto-creates a `ProducerProfile` for new producers |
+| `orders/signals.py` | `Order` saved | Deducts stock quantities when order status → confirmed |
+| `products/signals.py` | `Product` saved | Emails favouriting customers when a surplus deal is activated |
+| `delivery/signals.py` | `Order` saved | Creates one `Delivery` per producer when order is confirmed |
 
 ---
 
 ## Demo Data
 
-Fixtures are provided for all four apps to allow the system to be populated with realistic demo data for development and testing.
+Fixtures are loaded automatically by `entrypoint.sh` on container startup:
 
+```bash
+python manage.py loaddata accounts
+python manage.py loaddata producers
+python manage.py loaddata products
+```
 
-### Loading Fixtures
+Historical order data can be seeded separately from a CSV file:
 
-``` bash
-docker compose exec web python manage.py loaddata accounts/fixtures/accounts.json producers/fixtures/producers.json products/fixtures/products.json
+```bash
+docker compose exec web python manage.py seed_orders --csv purchase_history.csv
 ```
 
 ### Demo Accounts
 
-All accounts use the password **`demo1234`**.
+All seeded accounts use the password **`testpass123`**.
 
-Usernames: 
-- admin (superuser): Full admin access
-- fredsfarm (producer): Fred's Farm, North Yorkshire
-- greenvalley (producer) : Green Valley Dairy, Herefordshire
-- sunshineorganics (producer): Sunshine Organics, Devon
-- alice : Demo customer account
-- bob: Demo customer account
+| Username | Role |
+|---|---|
+| `fredsfarm` | Producer |
+| `greenvalley` | Producer |
+| `sunshineorganics` | Producer |
+| `riverside` | Producer |
+| `hilltop` | Producer |
+| `orchardlane` | Producer |
+| `meadowfresh` | Producer |
+| `thepreservery` | Producer |
+| `wildroots` | Producer |
+| `customer_<id>` | Customer (IDs from CSV) |
 
-### Demo Products
+A superuser must be created manually:
 
-10 products are loaded across all five categories: Vegetables, Dairy, Bakery, Preserves, and Seasonal Specialities.
+```bash
+docker exec -it <web_container_id> python manage.py createsuperuser
+```
 
 ---
 
@@ -164,97 +154,77 @@ Usernames:
 
 ### Prerequisites
 
--   Docker Desktop
--   Git
-
-------------------------------------------------------------------------
+- Docker Desktop
+- Git
 
 ### Setup Instructions
 
-1.  **Clone the repository**
+1. **Clone the repository**
 
-    ``` bash
+    ```bash
     git clone https://github.com/calwjones/DESD.git
-    cd DESD-Project
+    cd DESD
     ```
 
-2.  **Create environment configuration file**
+2. **Create environment configuration file**
 
-    ``` bash
+    ```bash
     cp .env.example .env
     ```
 
-3.  **Build and start the containers**
+3. **Build and start the containers**
 
-    ``` bash
+    ```bash
     docker compose up --build
     ```
 
+4. **Access the application**
 
-4.  **Access the application**
+    ```
+    http://localhost:8089
+    ```
 
-        http://localhost:8089
+5. **Access the Django admin**
 
-------------------------------------------------------------------------
+    ```
+    http://localhost:8089/admin/
+    ```
+
+---
 
 ### Useful Commands
 
 **Stop containers**
-
-``` bash
+```bash
 docker compose down
 ```
 
 **Rebuild containers**
-
-``` bash
+```bash
 docker compose up --build
 ```
 
 **Run Django management commands**
-
-``` bash
+```bash
 docker compose exec web python manage.py <command>
 ```
 
-------------------------------------------------------------------------
+**Create a superuser**
+```bash
+docker exec -it <web_container_id> python manage.py createsuperuser
+```
 
-### Clean Startup Verification
-
-To verify the project runs from a fresh state:
-
-``` bash
+**Full clean restart (removes volumes)**
+```bash
 docker compose down -v
 docker compose up --build
 ```
-
-This removes existing volumes and ensures the application starts
-correctly from a clean environment.
-
-## Future Development
-
-Future sprints will extend the system with additional features including:
-
-- Order processing and shopping cart functionality
-- Multi-vendor checkout system
-- Payment integration using Stripe
-- Delivery scheduling and logistics tracking
-- Weekly producer settlement calculations
-- Community features such as surplus produce discounts and food miles tracking
 
 ---
 
 ## Project Management
 
-The project is managed using **Jira** following an agile sprint methodology.
-
-Work is organised into **Epics, Tasks, and Sprints**, with progress tracked using status categories:
-
-- To Do
-- In Progress
-- Done
-
-Sprint planning is based on the requirements identified in the Term 1 analysis and process diagrams.
+The project is managed using **Jira** following an agile sprint methodology, organised into Epics, Tasks, and Sprints.
 
 ---
 
