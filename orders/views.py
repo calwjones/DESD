@@ -53,13 +53,14 @@ def update_cart(request, product_id):
 
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             product = get_object_or_404(Product, id=product_id)
-            item_subtotal = float(product.price * quantity)
+            # TC-019: honour active surplus discount in the cart, not just at checkout
+            item_subtotal = float(product.current_price * quantity)
 
             producer_subtotals = {}
             total = 0
             for pid, qty in cart.cart.items():
                 p = get_object_or_404(Product, id=pid)
-                subtotal = float(p.price * qty)
+                subtotal = float(p.current_price * qty)
                 total += subtotal
                 producer_name = p.producer.username
                 producer_subtotals[producer_name] = float(
@@ -776,7 +777,8 @@ def view_cart(request):
         product = get_object_or_404(
             Product.objects.select_related('producer__producer_profile'), id=product_id
         )
-        subtotal = product.price * quantity
+        # TC-019: honour active surplus discount in the cart, not just at checkout
+        subtotal = product.current_price * quantity
         total += subtotal
         producer_name = product.producer.username
         if producer_name not in producers_info:

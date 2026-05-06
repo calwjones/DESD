@@ -401,3 +401,420 @@ class ReviewViewTestCase(TestCase):
         review = Review.objects.get(product=self.product, customer=self.customer)
         self.assertEqual(review.rating, 5)
         self.assertEqual(review.title, 'First')
+
+
+# ======================================================================
+# TC-003 — ProductManagementTest
+# ======================================================================
+class ProductManagementTest(TestCase):
+    """TC-003 — producer creates, edits, deletes products; customers blocked."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.producer1 = User.objects.create_user(
+            username='pmprod1', email='pm1@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.producer2 = User.objects.create_user(
+            username='pmprod2', email='pm2@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='pmcust', email='pmc@test.local',
+            password='testpass123', role='customer',
+        )
+
+    def _add_product_payload(self, **overrides):
+        payload = {
+            'name': 'Test Product',
+            'description': 'desc',
+            'category': 'vegetables',
+            'price': '5.00',
+            'stock_quantity': 10,
+            'stock_threshold': 0,
+            'is_available': 'on',
+            'enable_ai_grading': '',  # opt out so we don't need to mock the AI
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_producer_can_add_product(self):
+        """POST /products/add/ as producer creates Product in DB linked to that producer."""
+        self.client.login(username='pmprod1', password='testpass123')
+        response = self.client.post(reverse('products:add'), data=self._add_product_payload(name='New Carrots'))
+        self.assertEqual(response.status_code, 302)
+        product = Product.objects.get(name='New Carrots')
+        self.assertEqual(product.producer, self.producer1)
+
+    def test_product_appears_in_marketplace(self):
+        """After creation, product name appears in GET /."""
+        product = Product.objects.create(
+            producer=self.producer1, name='Marketplace Visible Veg',
+            description='d', category='vegetables', price=5,
+            stock_quantity=5, is_available=True,
+        )
+        self.client.login(username='pmcust', password='testpass123')
+        response = self.client.get(reverse('marketplace'))
+        self.assertContains(response, 'Marketplace Visible Veg')
+
+    def test_customer_cannot_add_product(self):
+        """POST /products/add/ as customer returns redirect, no product created."""
+        self.client.login(username='pmcust', password='testpass123')
+        before = Product.objects.count()
+        response = self.client.post(reverse('products:add'), data=self._add_product_payload(name='Should Not Exist'))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Product.objects.count(), before)
+        self.assertFalse(Product.objects.filter(name='Should Not Exist').exists())
+
+    def test_producer_can_edit_own_product(self):
+        """POST /products/<pk>/edit/ updates product name in DB."""
+        product = Product.objects.create(
+            producer=self.producer1, name='Old Name',
+            description='d', category='vegetables', price=5,
+            stock_quantity=5, is_available=True,
+        )
+        self.client.login(username='pmprod1', password='testpass123')
+        self.client.post(
+            reverse('products:edit', args=[product.id]),
+            data=self._add_product_payload(name='New Name'),
+        )
+        product.refresh_from_db()
+        self.assertEqual(product.name, 'New Name')
+
+    def test_producer_cannot_edit_other_producers_product(self):
+        """POST edit on another producer's product → 404 (not their resource)."""
+        product = Product.objects.create(
+            producer=self.producer1, name='Owned by 1',
+            description='d', category='vegetables', price=5,
+            stock_quantity=5, is_available=True,
+        )
+        self.client.login(username='pmprod2', password='testpass123')
+        response = self.client.post(
+            reverse('products:edit', args=[product.id]),
+            data=self._add_product_payload(name='Hijacked'),
+        )
+        # 404 (the queryset filters to producer=self.user) — name unchanged
+        self.assertEqual(response.status_code, 404)
+        product.refresh_from_db()
+        self.assertEqual(product.name, 'Owned by 1')
+
+    def test_producer_can_delete_own_product(self):
+        """POST /products/<pk>/delete/ removes product from DB."""
+        product = Product.objects.create(
+            producer=self.producer1, name='Delete Me',
+            description='d', category='vegetables', price=5,
+            stock_quantity=5, is_available=True,
+        )
+        self.client.login(username='pmprod1', password='testpass123')
+        self.client.post(reverse('products:delete', args=[product.id]))
+        self.assertFalse(Product.objects.filter(id=product.id).exists())
+
+
+# ======================================================================
+# TC-011 — InventoryTest
+# ======================================================================
+class InventoryTest(TestCase):
+    """TC-011 — producer updates stock + availability."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.producer = User.objects.create_user(
+            username='invprod', email='inv@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='invcust', email='invc@test.local',
+            password='testpass123', role='customer',
+        )
+
+    def _edit_payload(self, **overrides):
+        payload = {
+            'name': 'Inv Test',
+            'description': 'd',
+            'category': 'vegetables',
+            'price': '5.00',
+            'stock_quantity': 10,
+            'stock_threshold': 0,
+            'is_available': 'on',
+            'enable_ai_grading': '',
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_stock_quantity_updates_correctly(self):
+        """POST edit with stock_quantity=35 saves 35 to DB."""
+        product = Product.objects.create(
+            producer=self.producer, name='Inv Test',
+            description='d', category='vegetables', price=5,
+            stock_quantity=10, is_available=True,
+        )
+        self.client.login(username='invprod', password='testpass123')
+        self.client.post(
+            reverse('products:edit', args=[product.id]),
+            data=self._edit_payload(stock_quantity=35),
+        )
+        product.refresh_from_db()
+        self.assertEqual(product.stock_quantity, 35)
+
+    def test_unavailable_product_hidden_from_marketplace(self):
+        """Product with is_available=False not in marketplace context."""
+        Product.objects.create(
+            producer=self.producer, name='Inv Hidden',
+            description='d', category='vegetables', price=5,
+            stock_quantity=5, is_available=False,
+        )
+        self.client.login(username='invcust', password='testpass123')
+        response = self.client.get(reverse('marketplace'))
+        product_names = [p.name for p in response.context['products']]
+        self.assertNotIn('Inv Hidden', product_names)
+
+    def test_available_product_visible_in_marketplace(self):
+        """Product with is_available=True appears in marketplace context."""
+        Product.objects.create(
+            producer=self.producer, name='Inv Visible',
+            description='d', category='vegetables', price=5,
+            stock_quantity=5, is_available=True,
+        )
+        self.client.login(username='invcust', password='testpass123')
+        response = self.client.get(reverse('marketplace'))
+        product_names = [p.name for p in response.context['products']]
+        self.assertIn('Inv Visible', product_names)
+
+    def test_negative_stock_rejected(self):
+        """POST edit with stock_quantity=-1 returns form errors."""
+        product = Product.objects.create(
+            producer=self.producer, name='Neg Stock',
+            description='d', category='vegetables', price=5,
+            stock_quantity=10, is_available=True,
+        )
+        self.client.login(username='invprod', password='testpass123')
+        response = self.client.post(
+            reverse('products:edit', args=[product.id]),
+            data=self._edit_payload(stock_quantity=-1),
+        )
+        # Form re-renders (200) with errors; product unchanged
+        self.assertEqual(response.status_code, 200)
+        product.refresh_from_db()
+        self.assertEqual(product.stock_quantity, 10)
+
+
+# ======================================================================
+# TC-014 — OrganicFilterTest
+# ======================================================================
+class OrganicFilterTest(TestCase):
+    """TC-014 — organic certification filter on the marketplace."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.producer = User.objects.create_user(
+            username='ofprod', email='of@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='ofcust', email='ofc@test.local',
+            password='testpass123', role='customer',
+        )
+        cls.organic = Product.objects.create(
+            producer=cls.producer, name='OF Organic Carrots',
+            description='d', category='vegetables', price=5,
+            stock_quantity=10, is_available=True, is_organic=True,
+        )
+        cls.non_organic = Product.objects.create(
+            producer=cls.producer, name='OF Regular Spuds',
+            description='d', category='vegetables', price=4,
+            stock_quantity=10, is_available=True, is_organic=False,
+        )
+
+    def test_organic_filter_returns_only_organic(self):
+        """GET / with organic filter — all products in context have is_organic=True."""
+        self.client.login(username='ofcust', password='testpass123')
+        # NB: implementation uses `?organic=on` (the doc spec said `organic_only=on`)
+        response = self.client.get(reverse('marketplace') + '?organic=on')
+        for product in response.context['products']:
+            self.assertTrue(product.is_organic)
+
+    def test_non_organic_excluded_from_filter(self):
+        """Non-organic product absent from organic filter results."""
+        self.client.login(username='ofcust', password='testpass123')
+        response = self.client.get(reverse('marketplace') + '?organic=on')
+        names = [p.name for p in response.context['products']]
+        self.assertIn('OF Organic Carrots', names)
+        self.assertNotIn('OF Regular Spuds', names)
+
+    def test_no_filter_returns_all_products(self):
+        """GET / with no filter returns both organic and non-organic."""
+        self.client.login(username='ofcust', password='testpass123')
+        response = self.client.get(reverse('marketplace'))
+        names = [p.name for p in response.context['products']]
+        self.assertIn('OF Organic Carrots', names)
+        self.assertIn('OF Regular Spuds', names)
+
+
+# ======================================================================
+# TC-015 — AllergenTest
+# ======================================================================
+class AllergenTest(TestCase):
+    """TC-015 — allergen warnings displayed on product detail."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.producer = User.objects.create_user(
+            username='alprod', email='al@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='alcust', email='alc@test.local',
+            password='testpass123', role='customer',
+        )
+
+    def test_allergen_info_shown_on_product_detail(self):
+        """assertContains(response, allergen_display) on product detail page."""
+        product = Product.objects.create(
+            producer=self.producer, name='Wheat Loaf',
+            description='d', category='bakery', price=3,
+            stock_quantity=5, is_available=True,
+            allergen_info='gluten,milk',
+        )
+        self.client.login(username='alcust', password='testpass123')
+        response = self.client.get(reverse('products:detail', args=[product.id]))
+        # Product.allergen_display renders human-readable names
+        self.assertContains(response, 'Gluten')
+        self.assertContains(response, 'Milk')
+
+    def test_no_allergens_shows_fallback_message(self):
+        """Product with empty allergen_info shows 'No allergens declared' on detail page."""
+        product = Product.objects.create(
+            producer=self.producer, name='Plain Veg',
+            description='d', category='vegetables', price=2,
+            stock_quantity=5, is_available=True, allergen_info='',
+        )
+        self.client.login(username='alcust', password='testpass123')
+        response = self.client.get(reverse('products:detail', args=[product.id]))
+        self.assertContains(response, 'No allergens declared')
+
+
+# ======================================================================
+# TC-016 — SeasonalAvailabilityTest
+# ======================================================================
+class SeasonalAvailabilityTest(TestCase):
+    """TC-016 — seasonal date filtering on marketplace."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.producer = User.objects.create_user(
+            username='sprod', email='s@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='scust', email='sc@test.local',
+            password='testpass123', role='customer',
+        )
+
+    def test_out_of_season_product_hidden(self):
+        """Product with available_until in the past not in marketplace queryset."""
+        past = timezone.now().date() - timedelta(days=10)
+        Product.objects.create(
+            producer=self.producer, name='Out Of Season',
+            description='d', category='fruit', price=3,
+            stock_quantity=5, is_available=True,
+            available_until=past,
+        )
+        self.client.login(username='scust', password='testpass123')
+        response = self.client.get(reverse('marketplace'))
+        names = [p.name for p in response.context['products']]
+        self.assertNotIn('Out Of Season', names)
+
+    def test_in_season_product_visible(self):
+        """Product with available_from past + available_until future appears in marketplace."""
+        past = timezone.now().date() - timedelta(days=5)
+        future = timezone.now().date() + timedelta(days=30)
+        Product.objects.create(
+            producer=self.producer, name='In Season Berries',
+            description='d', category='fruit', price=4,
+            stock_quantity=5, is_available=True,
+            available_from=past, available_until=future,
+        )
+        self.client.login(username='scust', password='testpass123')
+        response = self.client.get(reverse('marketplace'))
+        names = [p.name for p in response.context['products']]
+        self.assertIn('In Season Berries', names)
+
+    def test_no_dates_product_always_visible(self):
+        """Product with no available_from/until always appears."""
+        Product.objects.create(
+            producer=self.producer, name='Year Round Veg',
+            description='d', category='vegetables', price=2,
+            stock_quantity=5, is_available=True,
+        )
+        self.client.login(username='scust', password='testpass123')
+        response = self.client.get(reverse('marketplace'))
+        names = [p.name for p in response.context['products']]
+        self.assertIn('Year Round Veg', names)
+
+
+# ======================================================================
+# TC-019 — SurplusTest
+# ======================================================================
+class SurplusTest(TestCase):
+    """TC-019 — surplus produce discount system."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.producer = User.objects.create_user(
+            username='sufprod', email='suf@test.local',
+            password='testpass123', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='sufcust', email='sufc@test.local',
+            password='testpass123', role='customer',
+        )
+
+    def test_surplus_product_shows_badge(self):
+        """Product with is_surplus=True shows surplus % badge in marketplace template."""
+        Product.objects.create(
+            producer=self.producer, name='Surplus Tomatoes',
+            description='d', category='vegetables', price=10,
+            stock_quantity=5, is_available=True,
+            is_surplus=True, surplus_discount_pct=25,
+            surplus_expires_at=timezone.now() + timedelta(days=2),
+        )
+        self.client.login(username='sufcust', password='testpass123')
+        response = self.client.get(reverse('marketplace'))
+        # Marketplace template renders "{N}% off" for surplus products
+        self.assertContains(response, '25% off')
+        self.assertContains(response, 'Surplus Tomatoes')
+
+    def test_surplus_price_applied_at_checkout(self):
+        """Cart uses current_price (discounted) not full price for surplus product."""
+        product = Product.objects.create(
+            producer=self.producer, name='Surplus Apples',
+            description='d', category='fruit', price=10,
+            stock_quantity=5, is_available=True,
+            is_surplus=True, surplus_discount_pct=20,
+            surplus_expires_at=timezone.now() + timedelta(days=2),
+        )
+        self.assertEqual(product.current_price, 8)  # 10 * 0.8
+        self.client.login(username='sufcust', password='testpass123')
+        self.client.post(reverse('add_to_cart', args=[product.id]), data={'quantity': 2})
+        response = self.client.get(reverse('view_cart'))
+        # Cart total reflects discount: 2 × 8 = 16, not 2 × 10 = 20
+        self.assertEqual(response.context['total'], 16)
+
+    def test_non_surplus_product_no_badge(self):
+        """Product with is_surplus=False has no surplus badge in marketplace."""
+        Product.objects.create(
+            producer=self.producer, name='Plain Onions',
+            description='d', category='vegetables', price=5,
+            stock_quantity=5, is_available=True, is_surplus=False,
+        )
+        self.client.login(username='sufcust', password='testpass123')
+        response = self.client.get(reverse('marketplace'))
+        # Find the row containing "Plain Onions" and ensure no "% off" appears with it
+        # Simpler: assert there's no surplus discount badge text at all when no surplus product exists
+        self.assertNotContains(response, '% off')

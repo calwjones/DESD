@@ -20,6 +20,12 @@ def marketplace_view(request):
         is_available=True,
     ).filter(
         Q(best_before_date__isnull=True) | Q(best_before_date__gte=today)
+    ).filter(
+        # TC-016: hide products before their season starts
+        Q(available_from__isnull=True) | Q(available_from__lte=today)
+    ).filter(
+        # TC-016: hide products after their season ends
+        Q(available_until__isnull=True) | Q(available_until__gte=today)
     ).select_related(
         'producer__producer_profile'
     ).annotate(
