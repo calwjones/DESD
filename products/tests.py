@@ -509,3 +509,408 @@ class MarketplaceSearchTestCase(TestCase):
         )
         response = self.client.get(reverse('marketplace'), {'q': 'hidden'})
         self.assertNotContains(response, 'Hidden Item')
+
+
+class ProductListingTestCase(TestCase):
+    # TC-003: Producer can create a product listing
+    # Checks that products are correctly linked to producers
+    # and that availability is respected in the marketplace
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.producer = User.objects.create_user(
+            username='listingproducer', password='testpass123',
+            email='lp@test.local', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='listingcustomer', password='testpass123',
+            email='lc@test.local', role='customer',
+        )
+
+    def test_producer_can_access_add_product_page(self):
+        # The add product page should be accessible to producers
+        self.client.login(username='listingproducer', password='testpass123')
+        response = self.client.get(reverse('products:add'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_customer_cannot_access_add_product_page(self):
+        # Customers should not be able to get to the product creation form
+        self.client.login(username='listingcustomer', password='testpass123')
+        response = self.client.get(reverse('products:add'))
+        self.assertEqual(response.status_code, 302)
+
+    def test_product_is_linked_to_the_producer_who_created_it(self):
+        # When a product is created it should belong to the correct producer
+        product = Product.objects.create(
+            producer=self.producer,
+            name='Organic Free Range Eggs',
+            description='Fresh organic eggs from free-range hens collected daily',
+            category='dairy',
+            price=Decimal('3.50'),
+            stock_quantity=50,
+            allergen_info='eggs',
+            is_available=True,
+            is_organic=True,
+        )
+        self.assertEqual(product.producer, self.producer)
+
+    def test_product_is_visible_to_customers_after_creation(self):
+        # Once created and marked available the product should show in the marketplace
+        Product.objects.create(
+            producer=self.producer,
+            name='Fresh Honey',
+            description='Local wildflower honey',
+            category='preserves',
+            price=Decimal('6.00'),
+            stock_quantity=20,
+            is_available=True,
+        )
+        self.client.login(username='listingcustomer', password='testpass123')
+        response = self.client.get(reverse('marketplace'), {'q': 'Fresh Honey'})
+        self.assertContains(response, 'Fresh Honey')
+
+    def test_unavailable_product_is_not_visible_to_customers(self):
+        # Products marked as unavailable should show 0 results in the marketplace
+        Product.objects.create(
+            producer=self.producer,
+            name='Out Of Season Strawberries',
+            description='Strawberries',
+            category='fruit',
+            price=Decimal('4.00'),
+            stock_quantity=0,
+            is_available=False,
+        )
+        self.client.login(username='listingcustomer', password='testpass123')
+        response = self.client.get(reverse('marketplace'), {'q': 'Out Of Season Strawberries'})
+        # The search term appears in the search box but 0 products should be returned
+        self.assertContains(response, '0 results found')
+
+
+class CategoryBrowsingTestCase(TestCase):
+    # TC-004: Category browsing in the marketplace
+    # Customers should be able to filter by category and only see
+    # products from that specific category
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.producer = User.objects.create_user(
+            username='categoryproducer', password='testpass123',
+            email='cp@test.local', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='categorycustomer', password='testpass123',
+            email='cc@test.local', role='customer',
+        )
+        # Create one product in each category so we can test filtering
+        cls.veggie = Product.objects.create(
+            producer=cls.producer, name='Category Carrots',
+            description='Fresh carrots', category='vegetables',
+            price=Decimal('2.00'), stock_quantity=30, is_available=True,
+        )
+        cls.dairy = Product.objects.create(
+            producer=cls.producer, name='Category Cheese',
+            description='Aged cheddar', category='dairy',
+            price=Decimal('7.00'), stock_quantity=15, is_available=True,
+        )
+        cls.bakery = Product.objects.create(
+            producer=cls.producer, name='Category Bread',
+            description='Sourdough loaf', category='bakery',
+            price=Decimal('3.50'), stock_quantity=10, is_available=True,
+        )
+
+    def setUp(self):
+        self.client.login(username='categorycustomer', password='testpass123')
+
+    def test_filtering_by_vegetables_only_shows_vegetables(self):
+        # Applying the vegetables filter should hide dairy and bakery products
+        response = self.client.get(reverse('marketplace'), {'category': 'vegetables'})
+        self.assertContains(response, 'Category Carrots')
+        self.assertNotContains(response, 'Category Cheese')
+        self.assertNotContains(response, 'Category Bread')
+
+    def test_filtering_by_dairy_only_shows_dairy(self):
+        # Applying the dairy filter should hide everything that isnt dairy
+        response = self.client.get(reverse('marketplace'), {'category': 'dairy'})
+        self.assertContains(response, 'Category Cheese')
+        self.assertNotContains(response, 'Category Carrots')
+        self.assertNotContains(response, 'Category Bread')
+
+    def test_no_category_filter_shows_all_products(self):
+        # Without a category filter all available products should be shown
+        response = self.client.get(reverse('marketplace'))
+        self.assertContains(response, 'Category Carrots')
+        self.assertContains(response, 'Category Cheese')
+        self.assertContains(response, 'Category Bread')
+
+
+class InventoryManagementTestCase(TestCase):
+    # TC-011: Producer can update product stock and availability
+    # Tests that stock changes save correctly and the marketplace
+    # reflects those changes immediately for customers
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.producer = User.objects.create_user(
+            username='inventoryproducer', password='testpass123',
+            email='ip@test.local', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='inventorycustomer', password='testpass123',
+            email='ic@test.local', role='customer',
+        )
+
+    def _make_product(self, **overrides):
+        # Helper to create a basic product with sensible defaults
+        defaults = {
+            'producer': self.producer,
+            'name': 'Inventory Test Product',
+            'description': 'x',
+            'category': 'vegetables',
+            'price': Decimal('3.00'),
+            'stock_quantity': 20,
+            'is_available': True,
+        }
+        defaults.update(overrides)
+        return Product.objects.create(**defaults)
+
+    def test_producer_can_update_stock_quantity(self):
+        # Updating stock quantity directly on the model should persist correctly
+        product = self._make_product(stock_quantity=20)
+        product.stock_quantity = 35
+        product.save()
+        product.refresh_from_db()
+        self.assertEqual(product.stock_quantity, 35)
+
+    def test_producer_can_mark_product_as_unavailable(self):
+        # Setting is_available to False should persist and hide from customers
+        product = self._make_product(is_available=True)
+        product.is_available = False
+        product.save()
+        product.refresh_from_db()
+        self.assertFalse(product.is_available)
+
+    def test_unavailable_product_hidden_from_marketplace(self):
+        # Once marked unavailable the marketplace should return 0 results
+        self._make_product(name='Hidden Tomatoes', is_available=False)
+        self.client.login(username='inventorycustomer', password='testpass123')
+        response = self.client.get(reverse('marketplace'), {'q': 'Hidden Tomatoes'})
+        # Search term appears in the search box but no product cards should be shown
+        self.assertContains(response, '0 results found')
+
+    def test_producer_can_only_edit_their_own_products(self):
+        # A producer trying to edit another producers product should get a 404
+        other_producer = User.objects.create_user(
+            username='otherinvproducer', password='testpass123',
+            email='other@test.local', role='producer',
+        )
+        other_product = Product.objects.create(
+            producer=other_producer, name='Not Mine',
+            description='x', category='vegetables',
+            price=Decimal('1.00'), stock_quantity=5, is_available=True,
+        )
+        self.client.login(username='inventoryproducer', password='testpass123')
+        response = self.client.get(reverse('products:edit', args=[other_product.pk]))
+        self.assertEqual(response.status_code, 404)
+
+class OrganicFilterTestCase(TestCase):
+    # TC-014: Organic certification filter in the marketplace
+    # Customers should be able to filter to only see organic products
+    # and non-certified items should be excluded from those results
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.producer = User.objects.create_user(
+            username='organicproducer', password='testpass123',
+            email='op@test.local', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='organiccustomer', password='testpass123',
+            email='oc@test.local', role='customer',
+        )
+        # One organic and one non-organic so we can test the filter works both ways
+        cls.organic_product = Product.objects.create(
+            producer=cls.producer, name='Certified Organic Spinach',
+            description='Certified organic', category='vegetables',
+            price=Decimal('3.00'), stock_quantity=20,
+            is_available=True, is_organic=True,
+        )
+        cls.non_organic_product = Product.objects.create(
+            producer=cls.producer, name='Regular Spinach',
+            description='Conventional', category='vegetables',
+            price=Decimal('2.00'), stock_quantity=20,
+            is_available=True, is_organic=False,
+        )
+
+    def setUp(self):
+        self.client.login(username='organiccustomer', password='testpass123')
+
+    def test_organic_filter_only_shows_organic_products(self):
+        # When organic filter is on only certified products should appear
+        response = self.client.get(reverse('marketplace'), {'organic': 'on'})
+        self.assertContains(response, 'Certified Organic Spinach')
+        self.assertNotContains(response, 'Regular Spinach')
+
+    def test_no_organic_filter_shows_all_products(self):
+        # Without the filter both organic and non-organic should be visible
+        response = self.client.get(reverse('marketplace'))
+        self.assertContains(response, 'Certified Organic Spinach')
+        self.assertContains(response, 'Regular Spinach')
+
+    def test_organic_flag_is_correctly_stored_on_product(self):
+        # The is_organic field should be saved properly when set on a product
+        self.assertTrue(self.organic_product.is_organic)
+        self.assertFalse(self.non_organic_product.is_organic)
+
+
+class AllergenDisplayTestCase(TestCase):
+    # TC-015: Allergen information is displayed on product detail pages
+    # This is a critical food safety requirement - customers need to see
+    # allergens clearly before they buy anything
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.producer = User.objects.create_user(
+            username='allergenproducer', password='testpass123',
+            email='ap@test.local', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='allergencustomer', password='testpass123',
+            email='ac@test.local', role='customer',
+        )
+        # Product with a single dairy allergen
+        cls.cheese = Product.objects.create(
+            producer=cls.producer, name='Cheddar Cheese',
+            description='Aged cheddar', category='dairy',
+            price=Decimal('8.00'), stock_quantity=10,
+            is_available=True, allergen_info='milk',
+        )
+        # Product with multiple allergens to test comma separated parsing
+        cls.walnut_bread = Product.objects.create(
+            producer=cls.producer, name='Walnut Bread',
+            description='Handmade bread with walnuts', category='bakery',
+            price=Decimal('3.50'), stock_quantity=8,
+            is_available=True, allergen_info='gluten,nuts',
+        )
+        # Product with no allergens at all
+        cls.apples = Product.objects.create(
+            producer=cls.producer, name='Fresh Apples',
+            description='Cox apples from the orchard', category='fruit',
+            price=Decimal('2.50'), stock_quantity=30,
+            is_available=True, allergen_info='',
+        )
+
+    def setUp(self):
+        self.client.login(username='allergencustomer', password='testpass123')
+
+    def test_allergen_info_is_stored_correctly_on_product(self):
+        # Allergen data should be saved to the product correctly
+        self.assertEqual(self.cheese.allergen_info, 'milk')
+        self.assertEqual(self.walnut_bread.allergen_info, 'gluten,nuts')
+
+    def test_allergen_list_property_parses_correctly(self):
+        # The allergen_list property should split the comma separated string into a list
+        self.assertIn('milk', self.cheese.allergen_list)
+        self.assertIn('gluten', self.walnut_bread.allergen_list)
+        self.assertIn('nuts', self.walnut_bread.allergen_list)
+
+    def test_product_with_no_allergens_has_empty_allergen_list(self):
+        # A product with no allergens should return an empty list not crash
+        self.assertEqual(self.apples.allergen_list, [])
+
+    def test_product_detail_page_loads_for_product_with_allergens(self):
+        # The product detail page should load without errors for allergen products
+        response = self.client.get(reverse('products:detail', args=[self.cheese.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_hide_allergens_filter_removes_matching_products(self):
+        # If a customer has set milk as an allergen to avoid then cheese should
+        # not appear when the hide allergens filter is active
+        self.customer.avoided_allergens = 'milk'
+        self.customer.save()
+        response = self.client.get(reverse('marketplace'), {'hide_allergens': 'on'})
+        self.assertNotContains(response, 'Cheddar Cheese')
+        # Apples have no allergens so should still be visible
+        self.assertContains(response, 'Fresh Apples')
+
+
+class SurplusDealsTestCase(TestCase):
+    # TC-019: Producer marks products as surplus with a discount
+    # Surplus products should appear in the marketplace with correct discounted
+    # pricing and expire automatically after the set time
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.producer = User.objects.create_user(
+            username='surplusproducer', password='testpass123',
+            email='sp@test.local', role='producer',
+        )
+        cls.customer = User.objects.create_user(
+            username='surpluscustomer', password='testpass123',
+            email='sc@test.local', role='customer',
+        )
+
+    def _make_surplus_product(self, **overrides):
+        # Helper to create a surplus product with a 48 hour expiry by default
+        from django.utils import timezone
+        defaults = {
+            'producer': self.producer,
+            'name': 'Surplus Lettuce',
+            'description': 'Perfect condition must sell quickly',
+            'category': 'vegetables',
+            'price': Decimal('2.00'),
+            'stock_quantity': 50,
+            'is_available': True,
+            'is_surplus': True,
+            'surplus_discount_pct': 30,
+            'surplus_expires_at': timezone.now() + timezone.timedelta(hours=48),
+        }
+        defaults.update(overrides)
+        return Product.objects.create(**defaults)
+
+    def test_surplus_product_shows_in_surplus_filter(self):
+        # When filtering for surplus deals the surplus product should appear
+        self._make_surplus_product()
+        self.client.login(username='surpluscustomer', password='testpass123')
+        response = self.client.get(reverse('marketplace'), {'surplus': 'on'})
+        self.assertContains(response, 'Surplus Lettuce')
+
+    def test_non_surplus_product_does_not_show_in_surplus_filter(self):
+        # Regular products should not show up when the surplus filter is active
+        Product.objects.create(
+            producer=self.producer, name='Normal Carrots',
+            description='Just regular carrots', category='vegetables',
+            price=Decimal('2.00'), stock_quantity=20,
+            is_available=True, is_surplus=False,
+        )
+        self.client.login(username='surpluscustomer', password='testpass123')
+        response = self.client.get(reverse('marketplace'), {'surplus': 'on'})
+        self.assertNotContains(response, 'Normal Carrots')
+
+    def test_discounted_price_is_calculated_correctly(self):
+        # 30% off 2.00 should give 1.40 - checking the current_price property works
+        product = self._make_surplus_product(price=Decimal('2.00'), surplus_discount_pct=30)
+        expected_price = Decimal('2.00') * Decimal('0.70')
+        self.assertEqual(product.current_price, expected_price)
+
+    def test_expired_surplus_deal_is_not_active(self):
+        # A surplus deal past its expiry time should not be flagged as active
+        from django.utils import timezone
+        product = self._make_surplus_product(
+            surplus_expires_at=timezone.now() - timezone.timedelta(hours=1)
+        )
+        self.assertFalse(product.is_active_surplus)
+
+    def test_active_surplus_deal_is_recognised(self):
+        # A surplus deal with a future expiry should be flagged as active
+        product = self._make_surplus_product()
+        self.assertTrue(product.is_active_surplus)
+
+    def test_product_without_surplus_flag_is_not_active_surplus(self):
+        # A regular product should never be treated as a surplus deal
+        product = Product.objects.create(
+            producer=self.producer, name='Regular Potato',
+            description='x', category='vegetables',
+            price=Decimal('1.50'), stock_quantity=20,
+            is_available=True, is_surplus=False,
+        )
+        self.assertFalse(product.is_active_surplus)
