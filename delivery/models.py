@@ -68,14 +68,14 @@ class Delivery(models.Model):
         self.status = new_status
         self.save()
 
-        # Side effects
-        if new_status == 'collected':
-            from orders.views import _send_dispatch_email
-            _send_dispatch_email(self) 
-
+        # Side effects.
+        # NB: `collected` is intentionally silent — the customer was already
+        # told about dispatch when the producer marked the delivery ready
+        # (see orders.views.ship_order). The `collected` event is internal
+        # to the logistics flow and doesn't need a customer email.
         if new_status == 'out_for_delivery':
             from orders.views import _send_out_for_delivery_email
-            _send_out_for_delivery_email(self.order)
+            _send_out_for_delivery_email(self)
 
         if new_status == 'delivered':
             from orders.views import _send_delivered_email

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Save as Recurring Order{% endblock %}
+{% block content %}
+
+<div class="dashboard-header">
+  <h1>Save Cart as Recurring Order</h1>
+  <a href="{% url 'view_cart' %}" class="btn btn-secondary btn-sm">Back to Cart</a>
+</div>
+
+<p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+  This will save the items below as a recurring template. Each week on the recurrence day,
+  a pending order will be auto-generated with the same items at the current prices and stock.
+  You then check it out via the normal Stripe flow.
+</p>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start;">
+
+  <!-- Items preview -->
+  <div class="card">
+    <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Items in this template</h2>
+    <table class="product-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Producer</th>
+          <th>Qty</th>
+          <th>Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in cart_items %}
+        <tr>
+          <td style="font-weight: 500;">{{ item.product.name }}</td>
+          <td style="color: var(--muted);">{{ item.product.producer.username }}</td>
+          <td>{{ item.quantity }}</td>
+          <td>£{{ item.product.current_price }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p style="font-size: 0.75rem; color: var(--muted); margin-top: 0.75rem; margin-bottom: 0;">
+      Prices are re-snapshotted at generation time, so the next instance reflects the
+      current price (including any active surplus discount).
+    </p>
+  </div>
+
+  <!-- Schedule form -->
+  <div class="card">
+    <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Schedule</h2>
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+      <p>
+        {{ field.label_tag }}
+        {{ field }}
+        {% if field.help_text %}
+        <span class="helptext">{{ field.help_text }}</span>
+        {% endif %}
+        {% for error in field.errors %}
+        <span class="helptext" style="color: #900;">{{ error }}</span>
+        {% endfor %}
+      </p>
+      {% endfor %}
+      <button type="submit" class="btn" style="width: 100%; text-align: center; margin-top: 0.5rem;">
+        Save Recurring Order
+      </button>
+    </form>
+  </div>
+
+</div>
+
+{% endblock %}

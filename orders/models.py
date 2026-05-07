@@ -41,6 +41,13 @@ class Order(models.Model):
 
     delivery_address = models.TextField()
 
+    delivery_instructions = models.TextField(
+        blank=True,
+        default="",
+        help_text="Optional notes for the producer / delivery driver "
+                  "(access codes, leave-with-neighbour, allergies for the kitchen, etc).",
+    )
+
     stripe_session_id = models.CharField(
         max_length=200,
         blank=True,
@@ -189,6 +196,67 @@ class PaymentSplit(models.Model):
 
     def __str__(self):
         return f"Split: {self.producer.username} £{self.net_amount} (Order #{self.payment.order_id})"
+
+
+class RecurringOrder(models.Model):
+    """TC-018: customer-saved template that auto-generates a pending Order each
+    week on `recurrence_day`. Customer then checks out via the normal flow."""
+
+    DAY_CHOICES = [
+        (0, 'Monday'),
+        (1, 'Tuesday'),
+        (2, 'Wednesday'),
+        (3, 'Thursday'),
+        (4, 'Friday'),
+        (5, 'Saturday'),
+        (6, 'Sunday'),
+    ]
+
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='recurring_orders',
+    )
+    name = models.CharField(max_length=200, blank=True, default='')
+    recurrence_day = models.IntegerField(
+        choices=DAY_CHOICES,
+        help_text='Day of the week the order is auto-generated.',
+    )
+    delivery_day = models.IntegerField(
+        choices=DAY_CHOICES,
+        help_text='Day of the week to deliver. At least 2 days after recurrence_day.',
+    )
+    delivery_address = models.TextField()
+    delivery_instructions = models.TextField(blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_generated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        label = self.name or f"#{self.pk}"
+        return f"Recurring {label} ({self.get_recurrence_day_display()})"
+
+
+class RecurringOrderItem(models.Model):
+    recurring_order = models.ForeignKey(
+        RecurringOrder,
+        on_delete=models.CASCADE,
+        related_name='items',
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+    )
+    quantity = models.PositiveIntegerField()
+
+    class Meta:
+        unique_together = ('recurring_order', 'product')
+
+    def __str__(self):
+        return f"{self.product.name} x{self.quantity}"
 
 
 class Settlement(models.Model):

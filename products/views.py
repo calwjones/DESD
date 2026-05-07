@@ -126,8 +126,8 @@ def challenge_grade(request, pk):
 
 @login_required
 def write_review(request, product_id):
-    if request.user.role != 'customer':
-        messages.error(request, "Only customers can write reviews.")
+    if not request.user.is_buyer:
+        messages.error(request, "Only buyers can write reviews.")
         return redirect('marketplace')
 
     product = get_object_or_404(Product, id=product_id)

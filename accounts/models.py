@@ -3,11 +3,17 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 
+# Roles that behave as buyers — can browse, favourite, check out, review, reorder
+BUYER_ROLES = ('customer', 'community_group', 'restaurant')
+
+
 class CustomUser(AbstractUser):
     ROLE_CHOICES = [
         ('customer', 'Customer'),
         ('producer', 'Producer'),
-        ('logistics', 'Logistics'),  # new
+        ('logistics', 'Logistics'),
+        ('community_group', 'Community Group'),
+        ('restaurant', 'Restaurant'),
     ]
     role = models.CharField(
         max_length=20,
@@ -18,6 +24,10 @@ class CustomUser(AbstractUser):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     avoided_allergens = models.CharField(max_length=200, blank=True, default='')
+
+    @property
+    def is_buyer(self):
+        return self.role in BUYER_ROLES
 
     def __str__(self):
         return f"{self.username} ({self.role})"

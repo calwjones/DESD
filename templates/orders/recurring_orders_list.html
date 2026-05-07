@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Recurring Orders{% endblock %}
+{% block content %}
+
+<div class="dashboard-header">
+  <h1>Recurring Orders</h1>
+  <a href="{% url 'view_cart' %}" class="btn btn-secondary btn-sm">Back to Cart</a>
+</div>
+
+<p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+  Templates that auto-generate a pending order each week. The order is created on the recurrence day
+  and you check it out via the normal flow.
+</p>
+
+{% if templates %}
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <table class="product-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Generates</th>
+          <th>Delivers</th>
+          <th>Items</th>
+          <th>Status</th>
+          <th>Last generated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ro in templates %}
+        <tr>
+          <td style="font-weight: 500;">
+            <a href="{% url 'recurring_order_detail' ro.pk %}" style="color: var(--accent);">
+              {{ ro.name|default:"(Untitled)" }}
+            </a>
+          </td>
+          <td>{{ ro.get_recurrence_day_display }}</td>
+          <td>{{ ro.get_delivery_day_display }}</td>
+          <td>{{ ro.items.count }}</td>
+          <td>
+            {% if ro.is_active %}
+              <span class="badge badge-green">Active</span>
+            {% else %}
+              <span class="badge" style="background: var(--muted); color: white;">Paused</span>
+            {% endif %}
+          </td>
+          <td style="color: var(--muted); font-size: 0.85rem;">
+            {{ ro.last_generated_at|default:"—"|date:"d M Y" }}
+          </td>
+          <td style="display: flex; gap: 0.4rem;">
+            <form method="post" action="{% url 'recurring_order_toggle' ro.pk %}" style="display: inline;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-secondary btn-sm">
+                {% if ro.is_active %}Pause{% else %}Resume{% endif %}
+              </button>
+            </form>
+            <form method="post" action="{% url 'recurring_order_delete' ro.pk %}" style="display: inline;"
+                  onsubmit="return confirm('Delete this recurring order template? Items already generated will not be affected.');">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="card empty-state">
+    <p>You haven't saved any recurring orders yet.</p>
+    <p style="font-size: 0.875rem; color: var(--muted); margin-top: 0.5rem;">
+      Add items to your cart, then click "Save as recurring" to schedule weekly auto-generation.
+    </p>
+    <a href="{% url 'marketplace' %}" class="btn" style="margin-top: 1rem;">Browse Products</a>
+  </div>
+{% endif %}
+
+{% endblock %}

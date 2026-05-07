@@ -12,8 +12,8 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from decimal import Decimal, ROUND_HALF_UP
 from .cart import Cart
-from .forms import CheckoutForm
-from .models import Order, OrderItem, Payment, PaymentSplit
+from .forms import CheckoutForm, RecurringOrderForm
+from .models import Order, OrderItem, Payment, PaymentSplit, RecurringOrder, RecurringOrderItem
 from .services import calculate_commission_split, COMMISSION_RATE
 from products.models import Product
 from services.os_places_service import PostcodesService
@@ -53,13 +53,14 @@ def update_cart(request, product_id):
 
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             product = get_object_or_404(Product, id=product_id)
-            item_subtotal = float(product.price * quantity)
+            # TC-019: honour active surplus discount in the cart, not just at checkout
+            item_subtotal = float(product.current_price * quantity)
 
             producer_subtotals = {}
             total = 0
             for pid, qty in cart.cart.items():
                 p = get_object_or_404(Product, id=pid)
-                subtotal = float(p.price * qty)
+                subtotal = float(p.current_price * qty)
                 total += subtotal
                 producer_name = p.producer.username
                 producer_subtotals[producer_name] = float(
@@ -166,6 +167,7 @@ def checkout(request):
                 status="pending",
                 delivery_date=form.cleaned_data["delivery_date"],
                 delivery_address=full_address,
+                delivery_instructions=form.cleaned_data.get("delivery_instructions", ""),
             )
             for item in cart_items:
                 OrderItem.objects.create(
@@ -319,8 +321,8 @@ def order_confirmation(request, order_id):
 
 @login_required
 def order_history(request):
-    if request.user.role != 'customer':
-        return redirect('producer_dashboard')
+    if not request.user.is_buyer:
+        return redirect('marketplace')
 
     orders_qs = Order.objects.filter(customer=request.user).prefetch_related(
         'items__product__producer__producer_profile',
@@ -412,7 +414,7 @@ def order_history(request):
 
 @login_required
 def reorder(request, order_id):
-    if request.method != 'POST' or request.user.role != 'customer':
+    if request.method != 'POST' or not request.user.is_buyer:
         return redirect('order_history')
 
     order = get_object_or_404(Order, id=order_id, customer=request.user)
@@ -598,14 +600,19 @@ def _send_confirmation_emails(order):
             fail_silently=True,
         )
 
-def _send_out_for_delivery_email(order):
+def _send_out_for_delivery_email(delivery):
+    """Email the customer when *one* of their producers' deliveries is out
+    on the van. Per-delivery (not per-order) so multi-vendor orders get one
+    email per delivery."""
+    order = delivery.order
     send_mail(
         subject=f"Order #{order.id} Out for Delivery — DESD Marketplace",
         message=(
             f"Hi {order.customer.username},\n\n"
-            f"Your order is out for delivery and on its way to you.\n\n"
+            f"Your order from {delivery.producer.username} is out for delivery "
+            f"and on its way to you.\n\n"
             f"Order #{order.id}\n"
-            f"Tracking number: {order.tracking_number}\n"
+            f"Tracking number: {delivery.tracking_number}\n"
             f"Delivery address: {order.delivery_address}\n\n"
             f"Thanks for shopping with DESD Marketplace."
         ),
@@ -651,6 +658,116 @@ def _send_dispatch_email(delivery):
 
 
 @login_required
+def recurring_orders_list(request):
+    """TC-018: list this customer's recurring order templates."""
+    if not request.user.is_buyer:
+        return redirect('marketplace')
+    templates = (
+        RecurringOrder.objects
+        .filter(customer=request.user)
+        .prefetch_related('items__product__producer')
+    )
+    return render(request, 'orders/recurring_orders_list.html', {
+        'templates': templates,
+    })
+
+
+@login_required
+def save_cart_as_recurring(request):
+    """TC-018: turn the current session cart into a recurring template."""
+    if not request.user.is_buyer:
+        return redirect('marketplace')
+
+    cart = Cart(request)
+    if not cart.cart:
+        messages.error(request, 'Your cart is empty — add items before saving as a recurring order.')
+        return redirect('view_cart')
+
+    # Build cart preview for the template
+    cart_items = []
+    for product_id, quantity in cart.cart.items():
+        product = get_object_or_404(Product, id=product_id)
+        cart_items.append({
+            'product': product,
+            'quantity': quantity,
+            'subtotal': product.current_price * quantity,
+        })
+
+    if request.method == 'POST':
+        form = RecurringOrderForm(request.POST)
+        if form.is_valid():
+            ro = form.save(commit=False)
+            ro.customer = request.user
+            ro.save()
+            for ci in cart_items:
+                RecurringOrderItem.objects.create(
+                    recurring_order=ro,
+                    product=ci['product'],
+                    quantity=ci['quantity'],
+                )
+            messages.success(
+                request,
+                f"Saved as recurring order. Will auto-generate every "
+                f"{ro.get_recurrence_day_display()} for {ro.get_delivery_day_display()} delivery."
+            )
+            return redirect('recurring_orders_list')
+    else:
+        # Pre-fill delivery address from a recent order if available
+        last_order = (
+            Order.objects.filter(customer=request.user)
+            .exclude(delivery_address='')
+            .order_by('-created_at')
+            .first()
+        )
+        initial = {}
+        if last_order:
+            initial['delivery_address'] = last_order.delivery_address
+        form = RecurringOrderForm(initial=initial)
+
+    return render(request, 'orders/save_cart_as_recurring.html', {
+        'form': form,
+        'cart_items': cart_items,
+    })
+
+
+@login_required
+def recurring_order_detail(request, pk):
+    if not request.user.is_buyer:
+        return redirect('marketplace')
+    ro = get_object_or_404(
+        RecurringOrder.objects.prefetch_related('items__product__producer'),
+        pk=pk,
+        customer=request.user,
+    )
+    return render(request, 'orders/recurring_order_detail.html', {
+        'recurring_order': ro,
+    })
+
+
+@login_required
+def recurring_order_toggle(request, pk):
+    """Pause or resume a recurring order."""
+    if request.method != 'POST' or not request.user.is_buyer:
+        return redirect('recurring_orders_list')
+    ro = get_object_or_404(RecurringOrder, pk=pk, customer=request.user)
+    ro.is_active = not ro.is_active
+    ro.save()
+    state = 'resumed' if ro.is_active else 'paused'
+    messages.success(request, f"Recurring order {state}.")
+    return redirect('recurring_orders_list')
+
+
+@login_required
+def recurring_order_delete(request, pk):
+    if request.method != 'POST' or not request.user.is_buyer:
+        return redirect('recurring_orders_list')
+    ro = get_object_or_404(RecurringOrder, pk=pk, customer=request.user)
+    ro.delete()
+    messages.success(request, "Recurring order deleted.")
+    return redirect('recurring_orders_list')
+
+
+@login_required
 def view_cart(request):
     cart = Cart(request)
     cart_items = []
@@ -660,7 +777,8 @@ def view_cart(request):
         product = get_object_or_404(
             Product.objects.select_related('producer__producer_profile'), id=product_id
         )
-        subtotal = product.price * quantity
+        # TC-019: honour active surplus discount in the cart, not just at checkout
+        subtotal = product.current_price * quantity
         total += subtotal
         producer_name = product.producer.username
         if producer_name not in producers_info:

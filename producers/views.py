@@ -225,7 +225,7 @@ def producer_public_profile(request, pk):
     recipes = Recipe.objects.filter(producer=producer).order_by('-created_at')
     stories = FarmStory.objects.filter(producer=producer).order_by('-created_at')
     is_favourite = False
-    if request.user.is_authenticated and request.user.role == 'customer':
+    if request.user.is_authenticated and request.user.is_buyer:
         from accounts.models import FavouriteProducer
         is_favourite = FavouriteProducer.objects.filter(
             customer=request.user, producer=producer

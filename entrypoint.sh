@@ -3,9 +3,11 @@
 echo "Running migrations..."
 python manage.py migrate --noinput
 
-echo "Loading fixtures...(demo data)"
-python manage.py loaddata accounts
-python manage.py loaddata producers
-python manage.py loaddata products
+if [ -f purchase_history.csv ]; then
+    echo "Seeding demo data from purchase_history.csv..."
+    python manage.py seed_orders
+else
+    echo "No purchase_history.csv found, skipping demo seed."
+fi
 
 exec "$@"

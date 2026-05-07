@@ -36,7 +36,7 @@
     <input type="checkbox" name="surplus" {% if surplus_only %}checked{% endif %} style="width: auto;">
     Surplus deals
   </label>
-  {% if request.user.role == 'customer' %}
+  {% if request.user.is_buyer %}
   <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; text-transform: none; font-weight: 400; color: var(--text); cursor: pointer;"
          title="{% if not user_has_allergens %}Set your allergens in your profile first{% endif %}">
     <input type="checkbox" name="hide_allergens" {% if hide_allergens %}checked{% endif %}
@@ -101,7 +101,7 @@
       {% endif %}
       <p class="meta" style="display:flex; align-items:center; gap:0.4rem;">
         {{ product.get_category_display }} &middot; {{ product.producer.username }}
-        {% if request.user.role == 'customer' %}
+        {% if request.user.is_buyer %}
         <form method="post" action="{% url 'accounts:toggle_favourite' product.producer.id %}" style="display:inline; margin:0;">
           {% csrf_token %}
           <input type="hidden" name="next" value="{{ request.get_full_path }}">
